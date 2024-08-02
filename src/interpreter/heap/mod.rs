@@ -239,7 +239,7 @@ impl Heap {
     pub(crate) fn create_ref<K: Copy + Into<StorageKey>>(&mut self, key: K) -> HeapRef<K> {
         let storage_key = key.into();
         let counter_ref = match self.ref_roots.entry(storage_key) {
-            indexmap::map::Entry::Occupied(mut entry) => entry.get_mut().create_counter_ref(),
+            indexmap::map::Entry::Occupied(entry) => entry.get().create_counter_ref(),
             indexmap::map::Entry::Vacant(entry) => {
                 let ref_counter = RefCounter::default();
                 let counter_ref = ref_counter.create_counter_ref();
