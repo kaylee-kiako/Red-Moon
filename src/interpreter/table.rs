@@ -91,7 +91,11 @@ impl Table {
     }
 
     pub(crate) fn get_from_map(&self, key: StackValue) -> StackValue {
-        self.map.get(&key).cloned().unwrap_or(StackValue::Nil)
+        if let Some(value) = self.map.get(&key) {
+            *value
+        } else {
+            StackValue::Nil
+        }
     }
 
     pub(crate) fn set(&mut self, key: StackValue, value: StackValue) {
