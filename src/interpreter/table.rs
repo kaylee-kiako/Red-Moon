@@ -1,7 +1,7 @@
 use super::{heap::TableObjectKey, value_stack::StackValue};
 use crate::languages::lua::coerce_integer;
+use crate::BuildFastHasher;
 use indexmap::IndexMap;
-use rustc_hash::FxBuildHasher;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct Table {
     pub(crate) metatable: Option<TableObjectKey>,
-    pub(crate) map: IndexMap<StackValue, StackValue, FxBuildHasher>,
+    pub(crate) map: IndexMap<StackValue, StackValue, BuildFastHasher>,
     pub(crate) list: Vec<StackValue>,
 }
 

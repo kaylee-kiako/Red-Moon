@@ -156,8 +156,8 @@ impl<'de> Deserialize<'de> for Vm {
     {
         use crate::interpreter::heap::{BytesObjectKey, NativeFnObjectKey, Storage};
         use crate::interpreter::ByteString;
+        use crate::BuildFastHasher;
         use indexmap::IndexMap;
-        use rustc_hash::FxBuildHasher;
 
         #[derive(Deserialize)]
         #[serde(rename = "Vm")]
@@ -165,7 +165,7 @@ impl<'de> Deserialize<'de> for Vm {
             limits: VmLimits,
             gc: GarbageCollector,
             heap_storage: Storage,
-            tags: IndexMap<StackValue, NativeFnObjectKey, FxBuildHasher>,
+            tags: IndexMap<StackValue, NativeFnObjectKey, BuildFastHasher>,
             byte_strings: FastHashMap<ByteString, BytesObjectKey>,
         }
 

@@ -7,8 +7,9 @@ pub mod errors;
 pub mod interpreter;
 pub mod languages;
 
-type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
-type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+type BuildFastHasher = rustc_hash::FxBuildHasher;
+type FastHashMap<K, V> = std::collections::HashMap<K, V, BuildFastHasher>;
+type FastHashSet<K> = std::collections::HashSet<K, BuildFastHasher>;
 
 // https://github.com/rust-lang/cargo/issues/383#issuecomment-720873790
 #[cfg(doctest)]

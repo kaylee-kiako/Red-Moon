@@ -14,10 +14,9 @@ use super::value_stack::StackValue;
 use super::MultiValue;
 use crate::errors::RuntimeError;
 use crate::vec_cell::VecCell;
-use crate::FastHashMap;
+use crate::{BuildFastHasher, FastHashMap};
 use indexmap::IndexMap;
 use ref_counter::*;
-use rustc_hash::FxBuildHasher;
 use std::rc::Rc;
 
 #[cfg(feature = "serde")]
@@ -105,9 +104,9 @@ pub(crate) enum StorageKey {
 pub(crate) struct Heap {
     pub(crate) storage: Storage,
     pub(crate) byte_strings: FastHashMap<ByteString, BytesObjectKey>,
-    pub(crate) ref_roots: IndexMap<StorageKey, RefCounter, FxBuildHasher>,
+    pub(crate) ref_roots: IndexMap<StorageKey, RefCounter, BuildFastHasher>,
     #[cfg(feature = "serde")]
-    pub(crate) tags: IndexMap<StackValue, NativeFnObjectKey, FxBuildHasher>,
+    pub(crate) tags: IndexMap<StackValue, NativeFnObjectKey, BuildFastHasher>,
     pub(crate) resume_callbacks: FastHashMap<
         NativeFnObjectKey,
         NativeFunction<(Result<MultiValue, RuntimeError>, MultiValue)>,
@@ -153,7 +152,7 @@ impl Heap {
         gc.modify_used_memory((string_metatable.heap_size() + std::mem::size_of::<Table>()) as _);
         let string_metatable_key = storage.tables.insert(string_metatable);
 
-        let mut ref_roots = IndexMap::<StorageKey, RefCounter, FxBuildHasher>::default();
+        let mut ref_roots = IndexMap::<StorageKey, RefCounter, BuildFastHasher>::default();
         let ref_counter = RefCounter::default();
         let counter_ref = ref_counter.create_counter_ref();
         ref_roots.insert(StorageKey::Table(string_metatable_key), ref_counter.clone());
