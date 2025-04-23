@@ -174,21 +174,21 @@ impl Table {
     }
 
     pub(crate) fn set(&mut self, key: StackValue, value: StackValue) {
-        let used_list = match key {
-            StackValue::Integer(index) if index > 0 => self.set_in_list(index as usize - 1, value),
-            StackValue::Float(float) => {
-                if let Some(i) = coerce_integer(float) {
-                    self.set_in_list(i as usize - 1, value)
-                } else {
-                    false
+        match key {
+            StackValue::Integer(index) => {
+                if index > 0 && self.set_in_list(index as usize - 1, value) {
+                    return;
                 }
             }
-            _ => false,
+            StackValue::Float(float) => {
+                if let Some(i) = coerce_integer(float) {
+                    if i > 0 && self.set_in_list(i as usize - 1, value) {
+                        return;
+                    }
+                }
+            }
+            _ => {}
         };
-
-        if used_list {
-            return;
-        }
 
         self.set_in_map(key, value);
     }
