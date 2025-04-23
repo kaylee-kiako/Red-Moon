@@ -339,7 +339,7 @@ impl Lua {
     /// Create a function which prints its argument:
     ///
     /// ```
-    /// # use rollback_mlua::{Lua, Result};
+    /// # use red_moon_mlua::{Lua, Result};
     /// # fn main() -> Result<()> {
     /// # let lua = Lua::new();
     /// let greet = lua.create_function(|_, name: String| {
@@ -354,7 +354,7 @@ impl Lua {
     /// Use tuples to accept multiple arguments:
     ///
     /// ```
-    /// # use rollback_mlua::{Lua, Result};
+    /// # use red_moon_mlua::{Lua, Result};
     /// # fn main() -> Result<()> {
     /// # let lua = Lua::new();
     /// let print_person = lua.create_function(|_, (name, age): (String, u8)| {
@@ -733,7 +733,7 @@ impl Lua {
     /// # Examples
     ///
     /// ```
-    /// use mlua::{Lua, Result};
+    /// use red_moon_mlua::{Lua, Result};
     ///
     /// fn hello(lua: &Lua, _: ()) -> Result<()> {
     ///     let mut s = lua.app_data_mut::<&str>().unwrap();

@@ -1,28 +1,6 @@
 [workspace]
-members = ["red_moon_mlua", ".", "red_moon_cli"]
-
-[package]
-name = "red_moon"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[dependencies]
-indexmap = "2"
-slotmap = "1"
-downcast = "0.11"
-cpu-time = "1"
-rustc-hash = "2"
-serde = { version = "1", features = ["derive"], optional = true }
-thin-vec = { version = "0.2", features = ["serde"] }
-erasable = "1"
-slice-dst = "1"
-
-[dev-dependencies]
-pretty_assertions = "1"
-bincode = "1"
-rmp-serde = "1"
-ron = "0.8"
+resolver = "2"
+members = ["crates/red_moon", "crates/red_moon_cli", "crates/red_moon_mlua"]
 
 [profile.release]
 panic = "abort"
@@ -37,12 +15,6 @@ strip = true
 inherits = "release"
 debug = "limited"
 
-[features]
-# separate feature as it slows down the interpreter
-instruction_exec_counts = []
-serde = ["dep:serde", "slotmap/serde", "indexmap/serde"]
-default = ["serde"]
-
-[lints.clippy]
+[workspace.lints.clippy]
 redundant_closure = "allow"
 type_complexity = "allow"

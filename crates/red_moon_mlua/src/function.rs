@@ -28,7 +28,7 @@ impl<'lua> Function<'lua> {
     /// Call Lua's built-in `tostring` function:
     ///
     /// ```
-    /// # use rollback_mlua::{Function, Lua, Result};
+    /// # use red_moon_mlua::{Function, Lua, Result};
     /// # fn main() -> Result<()> {
     /// # let lua = Lua::new();
     /// let globals = lua.globals();
@@ -44,7 +44,7 @@ impl<'lua> Function<'lua> {
     /// Call a function with multiple arguments:
     ///
     /// ```
-    /// # use rollback_mlua::{Function, Lua, Result};
+    /// # use red_moon_mlua::{Function, Lua, Result};
     /// # fn main() -> Result<()> {
     /// # let lua = Lua::new();
     /// let sum: Function = lua.load(

@@ -1,0 +1,27 @@
+[package]
+name = "red_moon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+indexmap = "2"
+slotmap = "1"
+downcast = "0.11"
+cpu-time = "1"
+rustc-hash = "2"
+serde = { version = "1", features = ["derive"], optional = true }
+thin-vec = { version = "0.2", features = ["serde"] }
+erasable = "1"
+slice-dst = "1"
+
+[dev-dependencies]
+pretty_assertions = "1"
+bincode = "1"
+rmp-serde = "1"
+ron = "0.8"
+
+[features]
+# separate feature as it slows the interpreter
+instruction_exec_counts = []
+serde = ["dep:serde", "slotmap/serde", "indexmap/serde"]
+default = ["serde"]
