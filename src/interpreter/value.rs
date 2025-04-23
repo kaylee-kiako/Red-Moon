@@ -461,7 +461,7 @@ impl IntoValue for String {
     }
 }
 
-impl<'a> IntoValue for &'a str {
+impl IntoValue for &str {
     #[inline]
     fn into_value(self, ctx: &mut VmContext) -> Result<Value, RuntimeError> {
         Ok(Value::String(ctx.intern_string(self.as_bytes())))

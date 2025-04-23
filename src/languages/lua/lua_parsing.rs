@@ -19,9 +19,9 @@ pub(crate) fn parse_string<'source>(
             bytes_slice = &bytes_slice[len..bytes_slice.len() - len];
 
             // skip the first new line
-            if bytes_slice.starts_with(&[b'\n']) {
+            if bytes_slice.starts_with(b"\n") {
                 bytes_slice = &bytes_slice[1..];
-            } else if bytes_slice.starts_with(&[b'\r', b'\n']) {
+            } else if bytes_slice.starts_with(b"\r\n") {
                 bytes_slice = &bytes_slice[2..];
             }
 

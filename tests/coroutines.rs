@@ -26,7 +26,7 @@ fn resumable() -> Result<(), RuntimeError> {
             ctx.resume_call_with_state((i + 1, end, f.clone()))?;
 
             // call a function that can yield
-            f.call(i, ctx)?;
+            f.call::<_, ()>(i, ctx)?;
         }
 
         MultiValue::pack((), ctx)
@@ -53,7 +53,8 @@ fn resumable() -> Result<(), RuntimeError> {
 
     let compiler = LuaCompiler::default();
     let module = compiler.compile(SOURCE).unwrap();
-    ctx.load_function(file!(), None, module)?.call((), ctx)?;
+    ctx.load_function(file!(), None, module)?
+        .call::<_, ()>((), ctx)?;
 
     Ok(())
 }

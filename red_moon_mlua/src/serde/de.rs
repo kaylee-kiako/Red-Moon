@@ -121,7 +121,7 @@ impl<'lua> Deserializer<'lua> {
     }
 }
 
-impl<'lua, 'de> serde::Deserializer<'de> for Deserializer<'lua> {
+impl<'de> serde::Deserializer<'de> for Deserializer<'_> {
     type Error = Error;
 
     #[inline]
@@ -182,7 +182,7 @@ impl<'lua, 'de> serde::Deserializer<'de> for Deserializer<'lua> {
             Value::Table(table) => {
                 let _guard = RecursionGuard::new(&table, &self.visited);
 
-                let mut iter = table.pairs::<StdString, Value>();
+                let mut iter = table.pairs::<StdString, Value<'_>>();
                 let (variant, value) = match iter.next() {
                     Some(v) => v?,
                     None => {
@@ -361,7 +361,7 @@ struct SeqDeserializer<'lua> {
     visited: Rc<RefCell<FxHashSet<*const c_void>>>,
 }
 
-impl<'lua, 'de> de::SeqAccess<'de> for SeqDeserializer<'lua> {
+impl<'de> de::SeqAccess<'de> for SeqDeserializer<'_> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -402,11 +402,13 @@ pub(crate) enum MapPairs<'lua> {
 impl<'lua> MapPairs<'lua> {
     pub(crate) fn new(t: Table<'lua>, sort_keys: bool) -> Result<Self> {
         if sort_keys {
-            let mut pairs = t.pairs::<Value, Value>().collect::<Result<Vec<_>>>()?;
+            let mut pairs = t
+                .pairs::<Value<'_>, Value<'_>>()
+                .collect::<Result<Vec<_>>>()?;
             pairs.sort_by(|(a, _), (b, _)| b.cmp(a)); // reverse order as we pop values from the end
             Ok(MapPairs::Vec(pairs))
         } else {
-            Ok(MapPairs::Iter(t.pairs::<Value, Value>()))
+            Ok(MapPairs::Iter(t.pairs::<Value<'_>, Value<'_>>()))
         }
     }
 
@@ -444,7 +446,7 @@ struct MapDeserializer<'lua> {
     processed: usize,
 }
 
-impl<'lua, 'de> de::MapAccess<'de> for MapDeserializer<'lua> {
+impl<'de> de::MapAccess<'de> for MapDeserializer<'_> {
     type Error = Error;
 
     fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -525,7 +527,7 @@ struct VariantDeserializer<'lua> {
     visited: Rc<RefCell<FxHashSet<*const c_void>>>,
 }
 
-impl<'lua, 'de> de::VariantAccess<'de> for VariantDeserializer<'lua> {
+impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
     type Error = Error;
 
     fn unit_variant(self) -> Result<()> {

@@ -106,7 +106,7 @@ impl<'lua> Table<'lua> {
     ///
     /// This might invoke the `__index` metamethod.
     pub fn contains_key<K: IntoLua<'lua>>(&self, key: K) -> Result<bool> {
-        Ok(self.get::<_, Value>(key)? != Nil)
+        Ok(self.get::<_, Value<'_>>(key)? != Nil)
     }
 
     /// Appends a value to the back of the table.
@@ -188,14 +188,14 @@ impl<'lua> Table<'lua> {
         if let Some(mt) = self.get_metatable() {
             if mt.contains_key("__eq")? {
                 return mt
-                    .get::<_, Function>("__eq")?
+                    .get::<_, Function<'_>>("__eq")?
                     .call((self.clone(), other.clone()));
             }
         }
         if let Some(mt) = other.get_metatable() {
             if mt.contains_key("__eq")? {
                 return mt
-                    .get::<_, Function>("__eq")?
+                    .get::<_, Function<'_>>("__eq")?
                     .call((self.clone(), other.clone()));
             }
         }
@@ -526,7 +526,10 @@ impl<'lua> Table<'lua> {
 
         let t = self.clone();
         // Collect key/value pairs into a vector so we can sort them
-        let mut pairs = t.pairs::<Value, Value>().flatten().collect::<Vec<_>>();
+        let mut pairs = t
+            .pairs::<Value<'_>, Value<'_>>()
+            .flatten()
+            .collect::<Vec<_>>();
         // Sort keys
         pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
         if pairs.is_empty() {
@@ -553,7 +556,7 @@ impl fmt::Debug for Table<'_> {
     }
 }
 
-impl<'lua> PartialEq for Table<'lua> {
+impl PartialEq for Table<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.table_ref == other.table_ref
     }
@@ -685,7 +688,7 @@ impl<'lua> TableExt<'lua> for Table<'lua> {
         let lua = self.lua;
         let mut args = args.into_lua_multi(lua)?;
         args.push_front(Value::Table(self.clone()));
-        self.get::<_, Function>(name)?.call(args)
+        self.get::<_, Function<'_>>(name)?.call(args)
     }
 
     fn call_function<A, R>(&self, name: &str, args: A) -> Result<R>
@@ -693,7 +696,7 @@ impl<'lua> TableExt<'lua> for Table<'lua> {
         A: IntoLuaMulti<'lua>,
         R: FromLuaMulti<'lua>,
     {
-        self.get::<_, Function>(name)?.call(args)
+        self.get::<_, Function<'_>>(name)?.call(args)
     }
 }
 
@@ -706,7 +709,7 @@ pub(crate) struct SerializableTable<'a, 'lua> {
 }
 
 #[cfg(feature = "serialize")]
-impl<'lua> Serialize for Table<'lua> {
+impl Serialize for Table<'_> {
     #[inline]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         SerializableTable::new(self, Default::default(), Default::default()).serialize(serializer)
@@ -730,7 +733,7 @@ impl<'a, 'lua> SerializableTable<'a, 'lua> {
 }
 
 #[cfg(feature = "serialize")]
-impl<'a, 'lua> Serialize for SerializableTable<'a, 'lua> {
+impl Serialize for SerializableTable<'_, '_> {
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
     where
         S: Serializer,
@@ -746,7 +749,7 @@ impl<'a, 'lua> Serialize for SerializableTable<'a, 'lua> {
         let len = self.table.raw_len();
         if len > 0 || self.table.is_array() {
             let mut seq = serializer.serialize_seq(Some(len))?;
-            for value in self.table.clone().sequence_values_by_len::<Value>(None) {
+            for value in self.table.clone().sequence_values_by_len::<Value<'_>>(None) {
                 let value = &value.map_err(serde::ser::Error::custom)?;
                 let skip = check_value_for_skip(value, self.options, &self.visited)
                     .map_err(serde::ser::Error::custom)?;
@@ -865,8 +868,8 @@ where
 mod assertions {
     use super::*;
 
-    static_assertions::assert_not_impl_any!(Table: Send);
+    static_assertions::assert_not_impl_any!(Table<'_>: Send);
 
     #[cfg(feature = "unstable")]
-    static_assertions::assert_not_impl_any!(OwnedTable: Send);
+    static_assertions::assert_not_impl_any!(OwnedTable<'_>: Send);
 }

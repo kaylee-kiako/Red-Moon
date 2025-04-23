@@ -12,7 +12,7 @@ pub struct Function<'lua> {
     pub(crate) function_ref: FunctionRef,
 }
 
-impl<'lua> PartialEq for Function<'lua> {
+impl PartialEq for Function<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.function_ref == other.function_ref
     }
@@ -88,7 +88,7 @@ impl<'lua> Function<'lua> {
     }
 }
 
-impl<'lua> fmt::Debug for Function<'lua> {
+impl fmt::Debug for Function<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Function(Ref({:p}))", self.to_pointer())
     }

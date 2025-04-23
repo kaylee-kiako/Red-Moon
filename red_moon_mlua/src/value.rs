@@ -522,7 +522,7 @@ impl fmt::Debug for Value<'_> {
     }
 }
 
-impl<'lua> PartialEq for Value<'lua> {
+impl PartialEq for Value<'_> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Nil, Value::Nil) => true,
@@ -559,7 +559,7 @@ pub struct SerializableValue<'a, 'lua> {
 }
 
 #[cfg(feature = "serialize")]
-impl<'lua> Serialize for Value<'lua> {
+impl Serialize for Value<'_> {
     #[inline]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         SerializableValue::new(self, Default::default(), None).serialize(serializer)
@@ -622,7 +622,7 @@ impl<'a, 'lua> SerializableValue<'a, 'lua> {
 }
 
 #[cfg(feature = "serialize")]
-impl<'a, 'lua> Serialize for SerializableValue<'a, 'lua> {
+impl Serialize for SerializableValue<'_, '_> {
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
     where
         S: Serializer,
@@ -905,6 +905,6 @@ pub trait FromLuaMulti<'lua>: Sized {
 mod assertions {
     use super::*;
 
-    static_assertions::assert_not_impl_any!(Value: Send);
-    static_assertions::assert_not_impl_any!(MultiValue: Send);
+    static_assertions::assert_not_impl_any!(Value<'_>: Send);
+    static_assertions::assert_not_impl_any!(MultiValue<'_>: Send);
 }

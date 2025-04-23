@@ -19,7 +19,7 @@ pub struct String<'lua> {
     pub(crate) byte_string: OnceCell<ByteString>,
 }
 
-impl<'lua> String<'lua> {
+impl String<'_> {
     fn byte_string(&self) -> &ByteString {
         self.byte_string.get_or_init(|| {
             let vm = unsafe { self.lua.vm_mut() };
@@ -113,7 +113,7 @@ impl<'lua> String<'lua> {
     }
 }
 
-impl<'lua> fmt::Debug for String<'lua> {
+impl fmt::Debug for String<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let bytes = self.as_bytes();
         // Check if the string is valid utf8
@@ -142,13 +142,13 @@ impl<'lua> fmt::Debug for String<'lua> {
     }
 }
 
-impl<'lua> AsRef<[u8]> for String<'lua> {
+impl AsRef<[u8]> for String<'_> {
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
     }
 }
 
-impl<'lua> Borrow<[u8]> for String<'lua> {
+impl Borrow<[u8]> for String<'_> {
     fn borrow(&self) -> &[u8] {
         self.as_bytes()
     }
@@ -162,7 +162,7 @@ impl<'lua> Borrow<[u8]> for String<'lua> {
 // The only downside is that this disallows a comparison with `Cow<str>`, as that only implements
 // `AsRef<str>`, which collides with this impl. Requiring `AsRef<str>` would fix that, but limit us
 // in other ways.
-impl<'lua, T> PartialEq<T> for String<'lua>
+impl<T> PartialEq<T> for String<'_>
 where
     T: AsRef<[u8]> + ?Sized,
 {
@@ -171,16 +171,16 @@ where
     }
 }
 
-impl<'lua> Eq for String<'lua> {}
+impl Eq for String<'_> {}
 
-impl<'lua> Hash for String<'lua> {
+impl Hash for String<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_bytes().hash(state);
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<'lua> Serialize for String<'lua> {
+impl Serialize for String<'_> {
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
     where
         S: Serializer,

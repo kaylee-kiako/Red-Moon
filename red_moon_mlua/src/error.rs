@@ -487,7 +487,7 @@ impl From<red_moon::errors::LuaCompilationError> for Error {
             message: value.to_string(),
             incomplete_input: matches!(
                 value,
-                LuaCompilationError::SyntaxError(SyntaxError::UnexpectedEOF { .. })
+                LuaCompilationError::SyntaxError(SyntaxError::UnexpectedEOF)
             ),
         }
     }

@@ -383,9 +383,9 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         // check sign
         let mut negative = false;
 
-        if bytes.starts_with(&[b'+']) {
+        if bytes.starts_with(b"+") {
             bytes = &bytes[1..];
-        } else if bytes.starts_with(&[b'-']) {
+        } else if bytes.starts_with(b"-") {
             bytes = &bytes[1..];
             negative = true;
         }

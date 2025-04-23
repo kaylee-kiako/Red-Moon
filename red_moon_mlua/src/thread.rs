@@ -9,7 +9,7 @@ pub struct Thread<'lua> {
     pub(crate) coroutine_ref: CoroutineRef,
 }
 
-impl<'lua> Thread<'lua> {
+impl Thread<'_> {
     /// Converts the thread to a generic C pointer.
     ///
     /// There is no way to convert the pointer back to its original value.
@@ -21,13 +21,13 @@ impl<'lua> Thread<'lua> {
     }
 }
 
-impl<'lua> fmt::Debug for Thread<'lua> {
+impl fmt::Debug for Thread<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Thread(Ref({:p}))", self.to_pointer())
     }
 }
 
-impl<'lua> PartialEq for Thread<'lua> {
+impl PartialEq for Thread<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.to_pointer() == other.to_pointer()
     }
@@ -37,5 +37,5 @@ impl<'lua> PartialEq for Thread<'lua> {
 mod assertions {
     use super::*;
 
-    static_assertions::assert_not_impl_any!(Thread: Send);
+    static_assertions::assert_not_impl_any!(Thread<'_>: Send);
 }

@@ -110,7 +110,7 @@ pub enum ChunkMode {
     Binary,
 }
 
-impl<'lua, 'a> Chunk<'lua, 'a> {
+impl<'lua> Chunk<'lua, '_> {
     /// Sets the name of this chunk, which results in more informative error traces.
     pub fn set_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
@@ -140,8 +140,7 @@ impl<'lua, 'a> Chunk<'lua, 'a> {
     ///
     /// This is equivalent to calling the chunk function with no arguments and no return values.
     pub fn exec(self) -> Result<()> {
-        self.call(())?;
-        Ok(())
+        self.call(())
     }
 
     /// Evaluate the chunk as either an expression or block.

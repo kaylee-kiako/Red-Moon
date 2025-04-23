@@ -48,7 +48,8 @@ fn create_vm() -> Result<Vm, RuntimeError> {
 
     let compiler = LuaCompiler::default();
     let module = compiler.compile(SOURCE).unwrap();
-    ctx.load_function(file!(), None, module)?.call((), ctx)?;
+    ctx.load_function(file!(), None, module)?
+        .call::<_, ()>((), ctx)?;
 
     // create native function
     let f = ctx.create_function(|args, _| Ok(args));

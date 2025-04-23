@@ -391,7 +391,7 @@ pub struct VmContext<'vm> {
     pub(crate) vm: &'vm mut Vm,
 }
 
-impl<'vm> VmContext<'vm> {
+impl VmContext<'_> {
     pub fn clone_vm(&self) -> Vm {
         self.vm.clone()
     }
@@ -635,7 +635,7 @@ impl<'vm> VmContext<'vm> {
 
     pub fn create_function(
         &mut self,
-        callback: impl Fn(MultiValue, &mut VmContext) -> Result<MultiValue, RuntimeError>
+        callback: impl Fn(MultiValue, &mut VmContext<'_>) -> Result<MultiValue, RuntimeError>
             + Clone
             + 'static,
     ) -> FunctionRef {
@@ -745,7 +745,7 @@ impl<'vm> VmContext<'vm> {
         &mut self,
         callback: impl Fn(
                 (Result<MultiValue, RuntimeError>, MultiValue),
-                &mut VmContext,
+                &mut VmContext<'_>,
             ) -> Result<MultiValue, RuntimeError>
             + Clone
             + 'static,
@@ -754,7 +754,7 @@ impl<'vm> VmContext<'vm> {
         let gc = &mut self.vm.execution_data.gc;
 
         let key = heap.store_native_fn_with_key(gc, move |key| {
-            let function_callback = move |args, ctx: &mut VmContext| {
+            let function_callback = move |args, ctx: &mut VmContext<'_>| {
                 let heap = &mut ctx.vm.execution_data.heap;
 
                 let Some(callback) = heap.resume_callbacks.get(&key) else {
@@ -775,7 +775,7 @@ impl<'vm> VmContext<'vm> {
 
         let callback = NativeFunction::from(
             move |(mut result, mut state): (Result<MultiValue, RuntimeError>, MultiValue),
-                  ctx: &mut VmContext| {
+                  ctx: &mut VmContext<'_>| {
                 loop {
                     result = callback((result, state), ctx);
 
