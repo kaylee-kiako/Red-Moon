@@ -63,6 +63,16 @@ macro_rules! object_key_struct {
             pub(crate) struct $name;
         }
 
+        impl $name {
+            pub(crate) fn as_ffi(self) -> u64 {
+                self.0.as_ffi()
+            }
+
+            pub(crate) fn from_ffi(n: u64) -> Self {
+                Self(slotmap::KeyData::from_ffi(n))
+            }
+        }
+
         impl From<$name> for StorageKey {
             fn from(key: $name) -> StorageKey {
                 StorageKey::$storage_variant(key)

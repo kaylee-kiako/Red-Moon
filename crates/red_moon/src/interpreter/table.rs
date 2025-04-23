@@ -1,4 +1,8 @@
-use super::{heap::TableObjectKey, value_stack::StackValue};
+use super::heap::{
+    BytesObjectKey, CoroutineObjectKey, FnObjectKey, NativeFnObjectKey, StackObjectKey,
+    TableObjectKey,
+};
+use super::value_stack::StackValue;
 use crate::languages::lua::coerce_integer;
 use crate::BuildFastHasher;
 use indexmap::IndexMap;
@@ -6,11 +10,80 @@ use indexmap::IndexMap;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub(crate) struct MapKey {
+    variant: u8,
+    value: u64,
+}
+
+impl PartialEq for MapKey {
+    fn eq(&self, other: &Self) -> bool {
+        if self.variant != other.variant {
+            return false;
+        }
+
+        // float
+        if self.variant == 3 {
+            return f64::from_bits(self.value) == f64::from_bits(other.value);
+        }
+
+        self.value == other.value
+    }
+}
+
+impl Eq for MapKey {}
+
+impl std::hash::Hash for MapKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.variant.hash(state);
+        self.value.hash(state);
+    }
+}
+
+impl From<StackValue> for MapKey {
+    fn from(value: StackValue) -> MapKey {
+        fn from_pair(variant: u8, value: u64) -> MapKey {
+            MapKey { variant, value }
+        }
+
+        match value {
+            StackValue::Nil => from_pair(0, 0),
+            StackValue::Bool(b) => from_pair(1, b as _),
+            StackValue::Integer(i) => from_pair(2, i as _),
+            StackValue::Float(f) => from_pair(3, u64::from_ne_bytes(f.to_ne_bytes())),
+            StackValue::Pointer(key) => from_pair(4, key.as_ffi()),
+            StackValue::Bytes(key) => from_pair(5, key.as_ffi()),
+            StackValue::Table(key) => from_pair(6, key.as_ffi()),
+            StackValue::NativeFunction(key) => from_pair(7, key.as_ffi()),
+            StackValue::Function(key) => from_pair(8, key.as_ffi()),
+            StackValue::Coroutine(key) => from_pair(9, key.as_ffi()),
+        }
+    }
+}
+
+impl From<&MapKey> for StackValue {
+    fn from(key: &MapKey) -> StackValue {
+        match key.variant {
+            1 => StackValue::Bool(key.value != 0),
+            2 => StackValue::Integer(key.value as _),
+            3 => StackValue::Float(f64::from_bits(key.value)),
+            4 => StackValue::Pointer(StackObjectKey::from_ffi(key.value)),
+            5 => StackValue::Bytes(BytesObjectKey::from_ffi(key.value)),
+            6 => StackValue::Table(TableObjectKey::from_ffi(key.value)),
+            7 => StackValue::NativeFunction(NativeFnObjectKey::from_ffi(key.value)),
+            8 => StackValue::Function(FnObjectKey::from_ffi(key.value)),
+            9 => StackValue::Coroutine(CoroutineObjectKey::from_ffi(key.value)),
+            _ => StackValue::Nil,
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct Table {
     pub(crate) metatable: Option<TableObjectKey>,
-    pub(crate) map: IndexMap<StackValue, StackValue, BuildFastHasher>,
+    pub(crate) map: IndexMap<MapKey, StackValue, BuildFastHasher>,
     pub(crate) list: Vec<StackValue>,
 }
 
@@ -55,7 +128,7 @@ impl Table {
 
         for i in 1..=values.len() {
             let index = index_start + i;
-            let map_key = StackValue::Integer(index as _);
+            let map_key = MapKey::from(StackValue::Integer(index as _));
 
             self.map.swap_remove(&map_key);
         }
@@ -91,6 +164,8 @@ impl Table {
     }
 
     pub(crate) fn get_from_map(&self, key: StackValue) -> StackValue {
+        let key = MapKey::from(key);
+
         if let Some(value) = self.map.get(&key) {
             *value
         } else {
@@ -119,6 +194,8 @@ impl Table {
     }
 
     pub(crate) fn set_in_map(&mut self, key: StackValue, value: StackValue) {
+        let key = MapKey::from(key);
+
         if value == StackValue::Nil {
             self.map.shift_remove(&key);
         } else {
@@ -163,7 +240,10 @@ impl Table {
     fn merge_from_map_into_list(&mut self) {
         let mut map_index = self.list.len() as i64 + 1;
 
-        while let Some(value) = self.map.swap_remove(&StackValue::Integer(map_index)) {
+        while let Some(value) = self
+            .map
+            .swap_remove(&MapKey::from(StackValue::Integer(map_index)))
+        {
             self.list.push(value);
             map_index += 1;
         }
@@ -184,10 +264,10 @@ impl Table {
 
     pub(crate) fn next(&self, previous: StackValue) -> Option<(StackValue, StackValue)> {
         if previous == StackValue::Nil {
-            return self.map.first().map(|(k, v)| (*k, *v));
+            return self.map.first().map(|(k, v)| (k.into(), *v));
         }
 
-        let index = self.map.get_index_of(&previous)?;
-        self.map.get_index(index + 1).map(|(k, v)| (*k, *v))
+        let index = self.map.get_index_of(&MapKey::from(previous))?;
+        self.map.get_index(index + 1).map(|(k, v)| (k.into(), *v))
     }
 }

@@ -505,6 +505,8 @@ impl GarbageCollector {
 
                 if weak_keys {
                     for &element_key in table.map.keys() {
+                        let element_key = StackValue::from(&element_key);
+
                         if let Some(storage_key) = element_key.as_storage_key() {
                             self.acknowledge_weak_association(
                                 cache_pools,
@@ -516,7 +518,8 @@ impl GarbageCollector {
                     }
                 } else {
                     for key in table.map.keys() {
-                        self.mark_table_value(key);
+                        let key = StackValue::from(key);
+                        self.mark_table_value(&key);
                     }
                 }
 
@@ -539,11 +542,13 @@ impl GarbageCollector {
                             continue;
                         };
 
+                        let element_key = StackValue::from(element_key);
+
                         self.acknowledge_weak_association(
                             cache_pools,
                             storage_key,
                             table_key,
-                            *element_key,
+                            element_key,
                         );
                     }
                 } else {

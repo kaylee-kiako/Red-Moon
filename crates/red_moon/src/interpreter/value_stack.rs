@@ -8,7 +8,7 @@ use std::ops::Range;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) enum StackValue {
     #[default]
@@ -22,6 +22,28 @@ pub(crate) enum StackValue {
     NativeFunction(NativeFnObjectKey),
     Function(FnObjectKey),
     Coroutine(CoroutineObjectKey),
+}
+
+impl PartialEq for StackValue {
+    fn eq(&self, other: &Self) -> bool {
+        if core::mem::discriminant(self) != core::mem::discriminant(other) {
+            return false;
+        }
+
+        match (self, other) {
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::Pointer(l0), Self::Pointer(r0)) => l0 == r0,
+            (Self::Bytes(l0), Self::Bytes(r0)) => l0 == r0,
+            (Self::Table(l0), Self::Table(r0)) => l0 == r0,
+            (Self::NativeFunction(l0), Self::NativeFunction(r0)) => l0 == r0,
+            (Self::Function(l0), Self::Function(r0)) => l0 == r0,
+            (Self::Coroutine(l0), Self::Coroutine(r0)) => l0 == r0,
+            (Self::Nil, Self::Nil) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Eq for StackValue {}
