@@ -13,3 +13,6 @@ rustyline = { version = "14", default-features = false }
 # separate feature as it slows down the interpreter
 instruction_exec_counts = ["red_moon/instruction_exec_counts"]
 default = []
+
+[lints]
+workspace = true

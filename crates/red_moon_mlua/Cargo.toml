@@ -28,3 +28,6 @@ default = ["serialize"]
 name = "benchmark"
 harness = false
 required-features = []
+
+[lints]
+workspace = true

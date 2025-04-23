@@ -25,3 +25,6 @@ ron = "0.8"
 instruction_exec_counts = []
 serde = ["dep:serde", "slotmap/serde", "indexmap/serde"]
 default = ["serde"]
+
+[lints]
+workspace = true
