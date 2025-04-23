@@ -9,7 +9,7 @@ fn collect_gc_twice(lua: &Lua) {
 }
 
 // fn snapshots(c: &mut Criterion) {
-//     let mut lua = Lua::new_rollback(5);
+//     let mut lua = Lua::new();
 
 //     c.bench_function("snapshot", |b| {
 //         b.iter(|| {
@@ -20,7 +20,7 @@ fn collect_gc_twice(lua: &Lua) {
 // }
 
 // fn rollback(c: &mut Criterion) {
-//     let mut lua = Lua::new_rollback(5);
+//     let mut lua = Lua::new();
 //     lua.snap();
 
 //     c.bench_function("rollback", |b| {
@@ -129,7 +129,7 @@ fn call_lua_function(c: &mut Criterion) {
             || {
                 collect_gc_twice(&lua);
                 lua.load("function(a, b, c) return a + b + c end")
-                    .eval::<LuaFunction>()
+                    .eval::<LuaFunction<'_>>()
                     .unwrap()
             },
             |function| {
@@ -154,7 +154,7 @@ fn call_sum_callback(c: &mut Criterion) {
             || {
                 collect_gc_twice(&lua);
                 lua.load("function() for i = 1,10 do callback(i, i+1, i+2) end end")
-                    .eval::<LuaFunction>()
+                    .eval::<LuaFunction<'_>>()
                     .unwrap()
             },
             |function| {
@@ -168,7 +168,7 @@ fn call_sum_callback(c: &mut Criterion) {
 fn call_concat_callback(c: &mut Criterion) {
     let lua = Lua::new();
     let callback = lua
-        .create_function(|_, (a, b): (LuaString, LuaString)| {
+        .create_function(|_, (a, b): (LuaString<'_>, LuaString<'_>)| {
             Ok(format!("{}{}", a.to_str()?, b.to_str()?))
         })
         .unwrap();
@@ -179,7 +179,7 @@ fn call_concat_callback(c: &mut Criterion) {
             || {
                 collect_gc_twice(&lua);
                 lua.load("function() for i = 1,10 do callback('a', tostring(i)) end end")
-                    .eval::<LuaFunction>()
+                    .eval::<LuaFunction<'_>>()
                     .unwrap()
             },
             |function| {
