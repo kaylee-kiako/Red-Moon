@@ -13,13 +13,17 @@ struct Options {
     script: Option<String>,
     args: Vec<String>,
 
-    /// enter interactive mode after executing 'script'
+    /// Enter interactive mode after executing 'script'
     #[arg(short)]
     interactive: bool,
 
-    /// execute string
+    /// Execute string
     #[arg(short)]
     execute: Vec<String>,
+
+    /// Print instruction enums
+    #[arg(long)]
+    enum_code: bool,
 }
 
 fn main() -> ExitCode {
@@ -50,7 +54,14 @@ fn main2() -> Result<(), ()> {
 
     if !options.execute.is_empty() {
         for source in options.execute {
-            execute_source(ctx, &compiler, "(command line)", &source, Vec::new())?;
+            execute_source(
+                ctx,
+                &compiler,
+                "(command line)",
+                &source,
+                options.enum_code,
+                Vec::new(),
+            )?;
         }
 
         // only interactive if it's explicitly stated when a script is set
@@ -58,7 +69,7 @@ fn main2() -> Result<(), ()> {
     }
 
     if let Some(path) = options.script {
-        execute_file(ctx, &compiler, &path, options.args)?;
+        execute_file(ctx, &compiler, &path, options.enum_code, options.args)?;
 
         // only interactive if it's explicitly stated when a script is set
         interactive = options.interactive;
@@ -85,6 +96,7 @@ fn execute_file(
     ctx: &mut VmContext,
     compiler: &LuaCompiler,
     path: &str,
+    print_enum_code: bool,
     args: Vec<String>,
 ) -> Result<(), ()> {
     let source = match std::fs::read_to_string(path) {
@@ -95,7 +107,7 @@ fn execute_file(
         }
     };
 
-    execute_source(ctx, compiler, path, &source, args)
+    execute_source(ctx, compiler, path, &source, print_enum_code, args)
 }
 
 fn execute_source(
@@ -103,6 +115,7 @@ fn execute_source(
     compiler: &LuaCompiler,
     label: &str,
     source: &str,
+    print_enum_code: bool,
     args: Vec<String>,
 ) -> Result<(), ()> {
     // compile
@@ -113,6 +126,17 @@ fn execute_source(
             return Err(());
         }
     };
+
+    if print_enum_code {
+        for (i, chunk) in module.chunks.iter().enumerate() {
+            if module.main == i {
+                println!("Chunk {i} (main):");
+            } else {
+                println!("Chunk {i}:");
+            }
+            println!("{}\n", chunk.to_readable_instructions(label));
+        }
+    }
 
     let function_ref = ctx.load_function(label, None, module).unwrap();
 
