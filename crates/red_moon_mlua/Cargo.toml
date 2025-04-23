@@ -17,6 +17,7 @@ slotmap = "1"
 [dev-dependencies]
 criterion = { version = "0.5", features = [] }
 static_assertions = "1.0"
+serde_json = "1"
 
 [features]
 unstable = []

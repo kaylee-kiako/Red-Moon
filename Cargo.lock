@@ -609,6 +609,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde-value",
+ "serde_json",
  "slotmap",
  "static_assertions",
 ]

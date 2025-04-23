@@ -18,6 +18,7 @@ pub use crate::table::{Table, TableExt, TablePairs, TableSequence};
 pub use error::{Error, ErrorContext, ExternalError, ExternalResult, Result};
 pub use function::Function;
 pub use lua::{Lua, RegistryKey};
+pub use multi::Variadic;
 pub use scope::Scope;
 pub use stdlib::StdLib;
 pub use string::String;
