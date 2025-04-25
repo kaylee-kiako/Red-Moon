@@ -238,14 +238,12 @@ impl Table {
     }
 
     fn merge_from_map_into_list(&mut self) {
-        let mut map_index = self.list.len() as i64 + 1;
+        let map_index = self.list.len() as i64 + 1;
+        let mut map_key = MapKey::from(StackValue::Integer(map_index));
 
-        while let Some(value) = self
-            .map
-            .swap_remove(&MapKey::from(StackValue::Integer(map_index)))
-        {
+        while let Some(value) = self.map.swap_remove(&map_key) {
             self.list.push(value);
-            map_index += 1;
+            map_key.value += 1;
         }
     }
 
