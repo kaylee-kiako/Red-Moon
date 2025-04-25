@@ -1528,43 +1528,54 @@ impl CallContext {
             (StackValue::Integer(a), StackValue::Float(b)) => {
                 StackValue::Float(float_operation(a as f64, b))
             }
-            (StackValue::Integer(_) | StackValue::Float(_), _) => {
-                if value_b.lives_in_heap() {
-                    if let Some(call_result) = self.binary_metamethod(
-                        heap,
-                        value_stack,
-                        (value_b, metamethod_key),
-                        dest,
-                        value_a,
-                        value_b,
-                    ) {
-                        return Ok(Some(call_result));
-                    }
-                }
-
-                return Err(RuntimeErrorData::InvalidArithmetic(value_b.type_name(heap)));
-            }
             _ => {
-                if value_a.lives_in_heap() {
-                    if let Some(call_result) = self.binary_metamethod(
-                        heap,
-                        value_stack,
-                        (value_a, metamethod_key),
-                        dest,
-                        value_a,
-                        value_b,
-                    ) {
-                        return Ok(Some(call_result));
-                    }
-                }
-
-                return Err(RuntimeErrorData::InvalidArithmetic(value_a.type_name(heap)));
+                // avoiding passing value_a and value_b
+                // significantly improves speed when this branch isn't reached
+                // this path is uncommon, so we'll accept the speed loss from refetching values
+                return self.binary_number_metamethod_fallback(
+                    (heap, value_stack),
+                    (dest, a, b),
+                    metamethod_key,
+                );
             }
         };
 
         value_stack.set(self.register_base + dest as usize, value);
 
         Ok(None)
+    }
+
+    fn binary_number_metamethod_fallback(
+        &self,
+        (heap, value_stack): (&mut Heap, &mut ValueStack),
+        (dest, a, b): (Register, Register, Register),
+        metamethod_key: BytesObjectKey,
+    ) -> Result<Option<CallResult>, RuntimeErrorData> {
+        let value_a = value_stack.get_deref(heap, self.register_base + a as usize);
+        let value_b = value_stack.get_deref(heap, self.register_base + b as usize);
+
+        let metamethod_value = if matches!(value_a, StackValue::Integer(_) | StackValue::Float(_)) {
+            value_b
+        } else {
+            value_a
+        };
+
+        if metamethod_value.lives_in_heap() {
+            if let Some(call_result) = self.binary_metamethod(
+                heap,
+                value_stack,
+                (metamethod_value, metamethod_key),
+                dest,
+                value_a,
+                value_b,
+            ) {
+                return Ok(Some(call_result));
+            }
+        }
+
+        Err(RuntimeErrorData::InvalidArithmetic(
+            metamethod_value.type_name(heap),
+        ))
     }
 
     /// Converts integers to floats
