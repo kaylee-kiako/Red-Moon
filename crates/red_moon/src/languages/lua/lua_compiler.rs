@@ -2317,11 +2317,11 @@ where
     ) -> Result<(usize, usize), LuaCompilationError> {
         let local = self.top_function.register_local(self.source, name_token)?;
 
-        let top_register = self.top_function.next_register;
-
         // resolve initial value
-        let register = self.resolve_expression(top_register, ReturnMode::Static(1), 0)?;
+        let register = self.resolve_expression(local, ReturnMode::Static(1), 0)?;
         self.copy_stack_value(local, register);
+
+        let top_register = self.top_function.next_register;
 
         // resolve limit
         self.expect(LuaTokenLabel::Comma)?;
