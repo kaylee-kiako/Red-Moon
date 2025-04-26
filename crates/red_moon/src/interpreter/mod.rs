@@ -21,6 +21,9 @@ mod value;
 mod value_stack;
 mod vm;
 
+#[cfg(feature = "instruction_metrics")]
+mod instruction_metrics;
+
 pub use byte_string::ByteString;
 pub use coroutine::CoroutineStatus;
 pub use coroutine_ref::CoroutineRef;
@@ -40,3 +43,6 @@ pub(crate) use coroutine::Continuation;
 
 #[cfg(feature = "serde")]
 pub(crate) use {heap::StackObjectKey, interpreted_function::FunctionDefinition};
+
+#[cfg(feature = "instruction_metrics")]
+pub use instruction_metrics::InstructionMetrics;

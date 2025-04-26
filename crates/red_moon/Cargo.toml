@@ -21,8 +21,8 @@ rmp-serde = "1"
 ron = "0.8"
 
 [features]
-# separate feature as it slows the interpreter
-instruction_exec_counts = []
+# separate feature as it affects performance
+instruction_metrics = []
 serde = ["dep:serde", "slotmap/serde", "indexmap/serde"]
 default = ["serde"]
 

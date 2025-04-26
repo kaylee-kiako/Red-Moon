@@ -153,8 +153,8 @@ fn execute_source(
         return Err(());
     }
 
-    #[cfg(feature = "instruction_exec_counts")]
-    print_instruction_exec_counts(ctx);
+    #[cfg(feature = "instruction_metrics")]
+    print_instruction_metrics(ctx);
 
     Ok(())
 }
@@ -239,8 +239,8 @@ fn repl(vm: &mut Vm, compiler: &LuaCompiler) -> Result<(), ()> {
             }
         }
 
-        #[cfg(feature = "instruction_exec_counts")]
-        print_instruction_exec_counts(ctx);
+        #[cfg(feature = "instruction_metrics")]
+        print_instruction_metrics(ctx);
 
         input_buffer.clear();
     }
@@ -295,29 +295,86 @@ fn impl_rewind(ctx: &mut VmContext) -> Result<QueuedRewind, RuntimeError> {
     Ok(queued_rewind)
 }
 
-#[cfg(feature = "instruction_exec_counts")]
-pub(crate) fn print_instruction_exec_counts(ctx: &mut VmContext) {
-    let results = ctx.instruction_exec_counts();
-    ctx.clear_instruction_exec_counts();
+#[cfg(feature = "instruction_metrics")]
+pub(crate) fn print_instruction_metrics(ctx: &mut VmContext) {
+    use std::time::Duration;
 
-    // collect data for formatting
-    let mut label_max_len = 0;
-    let mut count_max_len = 0;
-    let mut total_instructions = 0;
+    use red_moon::interpreter::InstructionMetrics;
 
-    for (label, count) in &results {
-        label_max_len = label.len().max(label_max_len);
-        count_max_len = count_max_len.max(count.ilog10() + 1);
-        total_instructions += count;
+    // flush metrics
+    let results = ctx.instruction_metrics();
+    ctx.clear_instruction_metrics();
+
+    let total_instructions: usize = results.iter().map(|metrics| metrics.count).sum();
+
+    // build table
+    let mut table_builder = tabled::builder::Builder::new();
+
+    table_builder.push_record([
+        "instruction",
+        "min (ns)",
+        "max (ns)",
+        "avg (ns)",
+        "total (ns)",
+        "time%",
+        "hits",
+        "hit%",
+    ]);
+
+    let combined_metrics = results.iter().fold(
+        InstructionMetrics {
+            name: "(*)",
+            count: total_instructions,
+            min_time: if results.is_empty() {
+                Duration::ZERO
+            } else {
+                Duration::MAX
+            },
+            max_time: Duration::ZERO,
+            total_time: Duration::ZERO,
+        },
+        |mut acc, metrics| {
+            acc.min_time = acc.min_time.min(metrics.min_time);
+            acc.max_time = acc.max_time.max(metrics.max_time);
+            acc.total_time += metrics.total_time;
+            acc
+        },
+    );
+
+    let combined_time = combined_metrics.total_time;
+
+    for InstructionMetrics {
+        name,
+        count: hit_count,
+        min_time,
+        max_time,
+        total_time,
+    } in std::iter::once(combined_metrics).chain(results.into_iter())
+    {
+        let hit_percent = hit_count as f32 / total_instructions as f32 * 100.0;
+        let time_percent = ((total_time.as_nanos() * 100) / combined_time.as_nanos()) as f32;
+
+        table_builder.push_record([
+            name.to_string(),
+            format!("{}", min_time.as_nanos()),
+            format!("{}", max_time.as_nanos()),
+            format!("{}", total_time.as_nanos() / hit_count as u128),
+            format!("{}", total_time.as_nanos()),
+            format!("{time_percent:>.2}%"),
+            hit_count.to_string(),
+            format!("{hit_percent:>.2}%"),
+        ]);
     }
 
-    for (label, count) in results {
-        let percent = count as f32 / total_instructions as f32 * 100.0;
+    use tabled::settings::{
+        object::{Columns, Rows},
+        Alignment, Style,
+    };
 
-        println!(
-            "{percent:>6.2}% | {label:<label_max_len$} | {count:>count_max_len$}",
-            label_max_len = label_max_len,
-            count_max_len = count_max_len as usize
-        );
-    }
+    let mut table = table_builder.build();
+    table.modify(Columns::single(5), Alignment::right());
+    table.modify(Columns::single(7), Alignment::right());
+    table.modify(Rows::first(), Alignment::left());
+    table.with(Style::markdown());
+    println!("{table}");
 }

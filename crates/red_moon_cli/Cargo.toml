@@ -8,10 +8,11 @@ edition = "2021"
 red_moon = { path = "../red_moon" }
 clap = { version = "4", features = ["derive"] }
 rustyline = { version = "14", default-features = false }
+tabled = { version = "0.19", optional = true }
 
 [features]
-# separate feature as it slows down the interpreter
-instruction_exec_counts = ["red_moon/instruction_exec_counts"]
+# separate feature as it affects performance
+instruction_metrics = ["red_moon/instruction_metrics", "dep:tabled"]
 default = []
 
 [lints]

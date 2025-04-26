@@ -18,8 +18,8 @@ use downcast::downcast;
 use std::any::TypeId;
 use std::rc::Rc;
 
-#[cfg(feature = "instruction_exec_counts")]
-use super::instruction::InstructionCounter;
+#[cfg(feature = "instruction_metrics")]
+use super::instruction_metrics::InstructionMetricTracking;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -76,8 +76,8 @@ pub(crate) struct ExecutionAccessibleData {
     pub(crate) metatable_keys: Rc<MetatableKeys>,
     pub(crate) cache_pools: Rc<CachePools>,
     pub(crate) tracked_stack_size: usize,
-    #[cfg(feature = "instruction_exec_counts")]
-    pub(crate) instruction_counter: InstructionCounter,
+    #[cfg(feature = "instruction_metrics")]
+    pub(crate) instruction_tracking: InstructionMetricTracking,
 }
 
 impl Clone for ExecutionAccessibleData {
@@ -91,8 +91,8 @@ impl Clone for ExecutionAccessibleData {
             cache_pools: self.cache_pools.clone(),
             // reset, since there's no active call on the new vm
             tracked_stack_size: 0,
-            #[cfg(feature = "instruction_exec_counts")]
-            instruction_counter: Default::default(),
+            #[cfg(feature = "instruction_metrics")]
+            instruction_tracking: Default::default(),
         }
     }
 
@@ -105,9 +105,9 @@ impl Clone for ExecutionAccessibleData {
         // reset, since there's no active call on the new vm
         self.tracked_stack_size = 0;
 
-        #[cfg(feature = "instruction_exec_counts")]
+        #[cfg(feature = "instruction_metrics")]
         {
-            self.instruction_counter.clear();
+            self.instruction_tracking.clear();
         }
     }
 }
@@ -231,8 +231,8 @@ impl Vm {
                 metatable_keys: Rc::new(metatable_keys),
                 cache_pools: Default::default(),
                 tracked_stack_size: 0,
-                #[cfg(feature = "instruction_exec_counts")]
-                instruction_counter: Default::default(),
+                #[cfg(feature = "instruction_metrics")]
+                instruction_tracking: Default::default(),
             },
             execution_stack: Default::default(),
             registry: TableRef(registry),
@@ -251,22 +251,14 @@ impl Vm {
         self.execution_data.cache_pools.store_multi(multivalue)
     }
 
-    #[cfg(feature = "instruction_exec_counts")]
-    pub fn instruction_exec_counts(&mut self) -> Vec<(&'static str, usize)> {
-        let mut results = self
-            .execution_data
-            .instruction_counter
-            .data()
-            .collect::<Vec<_>>();
-
-        // sort by count reversed
-        results.sort_by_key(|(_, count)| usize::MAX - count);
-        results
+    #[cfg(feature = "instruction_metrics")]
+    pub fn instruction_metrics(&mut self) -> Vec<super::InstructionMetrics> {
+        self.execution_data.instruction_tracking.data()
     }
 
-    #[cfg(feature = "instruction_exec_counts")]
-    pub fn clear_instruction_exec_counts(&mut self) {
-        self.execution_data.instruction_counter.clear();
+    #[cfg(feature = "instruction_metrics")]
+    pub fn clear_instruction_metrics(&mut self) {
+        self.execution_data.instruction_tracking.clear();
     }
 
     #[inline]
@@ -407,15 +399,15 @@ impl VmContext<'_> {
     }
 
     #[inline]
-    #[cfg(feature = "instruction_exec_counts")]
-    pub fn instruction_exec_counts(&mut self) -> Vec<(&'static str, usize)> {
-        self.vm.instruction_exec_counts()
+    #[cfg(feature = "instruction_metrics")]
+    pub fn instruction_metrics(&mut self) -> Vec<super::InstructionMetrics> {
+        self.vm.instruction_metrics()
     }
 
     #[inline]
-    #[cfg(feature = "instruction_exec_counts")]
-    pub fn clear_instruction_exec_counts(&mut self) {
-        self.vm.clear_instruction_exec_counts();
+    #[cfg(feature = "instruction_metrics")]
+    pub fn clear_instruction_metrics(&mut self) {
+        self.vm.clear_instruction_metrics();
     }
 
     #[inline]

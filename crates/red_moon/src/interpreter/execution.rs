@@ -596,8 +596,8 @@ impl CallContext {
                 return Err(RuntimeErrorData::StackOverflow);
             }
 
-            #[cfg(feature = "instruction_exec_counts")]
-            exec_data.instruction_counter.track(instruction);
+            #[cfg(feature = "instruction_metrics")]
+            let _instruction_tracker = exec_data.instruction_tracking.track(instruction);
 
             let gc = &mut exec_data.gc;
             let heap = &mut exec_data.heap;

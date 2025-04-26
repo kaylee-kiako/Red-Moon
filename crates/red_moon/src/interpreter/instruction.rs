@@ -359,29 +359,3 @@ impl Instruction {
         }
     }
 }
-
-#[cfg(feature = "instruction_exec_counts")]
-#[derive(Default)]
-pub(crate) struct InstructionCounter {
-    map: crate::FastHashMap<std::mem::Discriminant<Instruction>, (Instruction, usize)>,
-}
-
-#[cfg(feature = "instruction_exec_counts")]
-impl InstructionCounter {
-    pub(crate) fn clear(&mut self) {
-        self.map.clear();
-    }
-
-    pub(crate) fn track(&mut self, instruction: Instruction) {
-        self.map
-            .entry(std::mem::discriminant(&instruction))
-            .and_modify(|(_, count)| *count += 1)
-            .or_insert((instruction, 1));
-    }
-
-    pub(crate) fn data(&self) -> impl Iterator<Item = (&'static str, usize)> + '_ {
-        self.map
-            .values()
-            .map(|(instruction, count)| (instruction.name(), *count))
-    }
-}
