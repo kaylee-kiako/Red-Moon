@@ -1,7 +1,4 @@
-use super::Heap;
-use super::NativeFnObjectKey;
-use super::StorageKey;
-use super::TableObjectKey;
+use super::{FastStorageKey, Heap, NativeFnObjectKey, StorageKey, TableObjectKey};
 use crate::interpreter::cache_pools::CachePools;
 use crate::interpreter::cache_pools::RECYCLE_LIMIT;
 use crate::interpreter::execution::ExecutionContext;
@@ -72,13 +69,13 @@ pub(crate) struct GarbageCollector {
     traversed_definitions: FastHashSet<usize>,
     /// gray + black, excluded keys are white
     #[cfg_attr(feature = "serde", serde(skip))]
-    marked: FastHashMap<StorageKey, Mark>,
+    marked: FastHashMap<FastStorageKey, Mark>,
     /// gray or pending sweep
     #[cfg_attr(feature = "serde", serde(skip))]
     phase_queue: Vec<StorageKey>,
     /// element_key/value -> Vec<(table_key, element_key)>
     #[cfg_attr(feature = "serde", serde(skip))]
-    weak_associations: FastHashMap<StorageKey, Vec<(TableObjectKey, StackValue)>>,
+    weak_associations: FastHashMap<FastStorageKey, Vec<(TableObjectKey, StackValue)>>,
 }
 
 impl Clone for GarbageCollector {
@@ -119,7 +116,7 @@ impl GarbageCollector {
     }
 
     pub(crate) fn acknowledge_write(&mut self, key: StorageKey) {
-        let Some(mark) = self.marked.get_mut(&key) else {
+        let Some(mark) = self.marked.get_mut(&key.into()) else {
             // not marked, we'll handle this through normal traversal
             return;
         };
@@ -279,7 +276,7 @@ impl GarbageCollector {
         let mut mark_count = 0;
 
         while let Some(key) = self.phase_queue.pop() {
-            self.marked.insert(key, Mark::Black);
+            self.marked.insert(key.into(), Mark::Black);
             self.traverse_heap_value(metatable_keys, cache_pools, heap, key);
 
             mark_count += 1;
@@ -294,7 +291,7 @@ impl GarbageCollector {
         debug_assert!(self.phase_queue.is_empty());
 
         for key in heap.storage.keys() {
-            if !self.marked.contains_key(&key) {
+            if !self.marked.contains_key(&key.into()) {
                 self.phase_queue.push(key);
             }
         }
@@ -309,7 +306,7 @@ impl GarbageCollector {
 
         while let Some(key) = self.phase_queue.pop() {
             // clear weak associations
-            if let Some(list) = self.weak_associations.remove(&key) {
+            if let Some(list) = self.weak_associations.remove(&key.into()) {
                 let key_stack_value: StackValue = key.into();
 
                 for &(table_key, element_key) in &list {
@@ -439,11 +436,11 @@ impl GarbageCollector {
     }
 
     fn mark_storage_key(&mut self, key: StorageKey) {
-        if self.marked.contains_key(&key) {
+        if self.marked.contains_key(&key.into()) {
             return;
         }
 
-        self.marked.insert(key, Mark::Gray);
+        self.marked.insert(key.into(), Mark::Gray);
         self.phase_queue.push(key);
     }
 
@@ -596,7 +593,7 @@ impl GarbageCollector {
     }
 
     fn mark_heap_key_root(&mut self, key: StorageKey) {
-        self.marked.insert(key, Mark::Gray);
+        self.marked.insert(key.into(), Mark::Gray);
         self.phase_queue.push(key);
     }
 
@@ -609,7 +606,7 @@ impl GarbageCollector {
     ) {
         let list = self
             .weak_associations
-            .entry(key)
+            .entry(key.into())
             .or_insert_with(|| cache_pools.create_weak_associations_list());
 
         list.push((table_key, element_key));

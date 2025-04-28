@@ -112,6 +112,30 @@ pub(crate) enum StorageKey {
     Coroutine(CoroutineObjectKey),
 }
 
+/// Faster than StorageKey when used as a HashMap Key, since the variant and value can be compared directly
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct FastStorageKey {
+    variant: u8,
+    value: u64,
+}
+
+impl From<StorageKey> for FastStorageKey {
+    fn from(value: StorageKey) -> Self {
+        fn from_pair(variant: u8, value: u64) -> FastStorageKey {
+            FastStorageKey { variant, value }
+        }
+
+        match value {
+            StorageKey::StackValue(key) => from_pair(0, key.as_ffi()),
+            StorageKey::Bytes(key) => from_pair(1, key.as_ffi()),
+            StorageKey::Table(key) => from_pair(2, key.as_ffi()),
+            StorageKey::NativeFunction(key) => from_pair(3, key.as_ffi()),
+            StorageKey::Function(key) => from_pair(4, key.as_ffi()),
+            StorageKey::Coroutine(key) => from_pair(5, key.as_ffi()),
+        }
+    }
+}
+
 pub(crate) struct Heap {
     pub(crate) storage: Storage,
     pub(crate) byte_strings: FastHashMap<ByteString, BytesObjectKey>,
