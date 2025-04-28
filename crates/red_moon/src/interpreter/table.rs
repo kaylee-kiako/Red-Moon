@@ -143,8 +143,10 @@ impl Table {
             }
             StackValue::Float(float) => {
                 if let Some(i) = coerce_integer(float) {
-                    if let Some(value) = self.list.get(i as usize - 1) {
-                        return *value;
+                    if i > 0 {
+                        if let Some(value) = self.list.get(i as usize - 1) {
+                            return *value;
+                        }
                     }
                 }
             }
