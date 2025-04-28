@@ -355,10 +355,13 @@ impl GarbageCollector {
                         #[cfg(not(debug_assertions))]
                         continue;
                     };
+
+                    // we shouldn't need to clear the table's metatable since we're using slotmap's SecondaryMap
+
                     self.used_memory -= std::mem::size_of_val(&table) + table.heap_size();
 
                     if heap.recycled_tables.len() < RECYCLE_LIMIT {
-                        table.reset();
+                        table.clear();
                         heap.recycled_tables.push(table);
                     }
                 }
@@ -483,7 +486,7 @@ impl GarbageCollector {
                 let mut weak_keys = false;
                 let mut weak_values = false;
 
-                if let Some(key) = table.metatable {
+                if let Some(key) = heap.get_table_metatable(table_key) {
                     self.mark_storage_key(key.into());
 
                     if let Some(metatable) = heap.get_table(key) {

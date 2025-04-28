@@ -1974,7 +1974,7 @@ impl CallContext {
         let metamethod_key = exec_data.metatable_keys.newindex.0.key();
         let src_value = value_stack.get_deref(heap, self.register_base + src as usize);
 
-        if let Some(function_key) = heap.get_metamethod(table_key.into(), metamethod_key) {
+        if let Some(function_key) = heap.get_table_metamethod(table_key, metamethod_key) {
             let function_index = value_stack.len() - self.register_base;
 
             value_stack.extend([

@@ -16,11 +16,9 @@ impl TableRef {
 
     pub fn metatable(&self, ctx: &mut VmContext) -> Result<Option<TableRef>, RuntimeError> {
         let heap = &mut ctx.vm.execution_data.heap;
-        let Some(table) = heap.get_table(self.0.key()) else {
-            return Err(RuntimeErrorData::InvalidRef.into());
-        };
-
-        let metatable_ref = table.metatable().map(|key| TableRef(heap.create_ref(key)));
+        let metatable_ref = heap
+            .get_table_metatable(self.0.key())
+            .map(|key| TableRef(heap.create_ref(key)));
 
         Ok(metatable_ref)
     }
@@ -44,11 +42,7 @@ impl TableRef {
             })
             .transpose()?;
 
-        let Some(table) = heap.get_table_mut(gc, self.0.key()) else {
-            return Err(RuntimeErrorData::InvalidRef.into());
-        };
-
-        table.set_metatable(metatable_key);
+        heap.set_table_metatable(gc, self.0.key(), metatable_key);
 
         Ok(())
     }
@@ -126,7 +120,7 @@ impl TableRef {
         let method_key = ctx.metatable_keys().index.0.key();
 
         let heap = &mut ctx.vm.execution_data.heap;
-        if let Some(function_key) = heap.get_metamethod(table_key.into(), method_key) {
+        if let Some(function_key) = heap.get_table_metamethod(table_key, method_key) {
             return ctx.call_function_key(function_key, (self.clone(), key));
         };
 
@@ -148,7 +142,7 @@ impl TableRef {
         let method_key = ctx.metatable_keys().newindex.0.key();
 
         let heap = &mut ctx.vm.execution_data.heap;
-        if let Some(function_key) = heap.get_metamethod(table_key.into(), method_key) {
+        if let Some(function_key) = heap.get_table_metamethod(table_key, method_key) {
             return ctx.call_function_key(function_key, (self.clone(), key, value));
         };
 
@@ -168,7 +162,7 @@ impl TableRef {
         let len_key = ctx.metatable_keys().len.0.key();
 
         let heap = &mut ctx.vm.execution_data.heap;
-        let Some(function_key) = heap.get_metamethod(table_key.into(), len_key) else {
+        let Some(function_key) = heap.get_table_metamethod(table_key, len_key) else {
             return Ok(len);
         };
 

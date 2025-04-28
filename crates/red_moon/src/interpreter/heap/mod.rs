@@ -28,6 +28,7 @@ pub(crate) struct Storage {
     pub(super) stack_values: slotmap::SlotMap<StackObjectKey, StackValue>,
     pub(super) byte_strings: slotmap::SlotMap<BytesObjectKey, ByteString>,
     pub(super) tables: slotmap::SlotMap<TableObjectKey, Table>,
+    pub(super) metatables: slotmap::SecondaryMap<TableObjectKey, TableObjectKey>,
     pub(super) native_functions: slotmap::SlotMap<NativeFnObjectKey, NativeFunction<MultiValue>>,
     pub(super) functions: slotmap::SlotMap<FnObjectKey, Function>,
     pub(super) coroutines: slotmap::SlotMap<CoroutineObjectKey, Coroutine>,
@@ -359,21 +360,72 @@ impl Heap {
         self.storage.native_functions[key] = value;
     }
 
+    pub(crate) fn get_table_metatable(&self, key: TableObjectKey) -> Option<TableObjectKey> {
+        self.storage.metatables.get(key).cloned()
+    }
+
+    pub(crate) fn set_table_metatable(
+        &mut self,
+        gc: &mut GarbageCollector,
+        table_key: TableObjectKey,
+        metatable_key: Option<TableObjectKey>,
+    ) {
+        gc.acknowledge_write(table_key.into());
+
+        match metatable_key {
+            Some(metatable_key) => {
+                self.storage.metatables.insert(table_key, metatable_key);
+            }
+            None => {
+                self.storage.metatables.remove(table_key);
+            }
+        }
+    }
+
+    pub(crate) fn get_table_metavalue(
+        &self,
+        table_key: TableObjectKey,
+        name: BytesObjectKey,
+    ) -> StackValue {
+        let Some(metatable_key) = self.storage.metatables.get(table_key) else {
+            return StackValue::Nil;
+        };
+
+        let Some(metatable) = self.storage.tables.get(*metatable_key) else {
+            #[cfg(debug_assertions)]
+            unreachable!();
+            #[cfg(not(debug_assertions))]
+            return StackValue::Nil;
+        };
+
+        metatable.get(name.into())
+    }
+
+    pub(crate) fn get_table_metamethod(
+        &self,
+        table_key: TableObjectKey,
+        name: BytesObjectKey,
+    ) -> Option<StackValue> {
+        let value = self.get_table_metavalue(table_key, name);
+
+        if !matches!(
+            value,
+            StackValue::Function(_) | StackValue::NativeFunction(_)
+        ) {
+            return None;
+        }
+
+        Some(value)
+    }
+
     pub(crate) fn get_metavalue(&self, value: StackValue, name: BytesObjectKey) -> StackValue {
         let metatable_key = match value {
             StackValue::Table(key) => {
-                let Some(table) = self.storage.tables.get(key) else {
-                    #[cfg(debug_assertions)]
-                    unreachable!();
-                    #[cfg(not(debug_assertions))]
+                let Some(key) = self.storage.metatables.get(key) else {
                     return StackValue::Nil;
                 };
 
-                let Some(key) = table.metatable() else {
-                    return StackValue::Nil;
-                };
-
-                key
+                *key
             }
             StackValue::Bytes(_) => self.string_metatable_ref.key(),
             _ => return StackValue::Nil,

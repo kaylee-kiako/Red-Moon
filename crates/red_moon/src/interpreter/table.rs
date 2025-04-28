@@ -82,7 +82,6 @@ impl From<&MapKey> for StackValue {
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct Table {
-    pub(crate) metatable: Option<TableObjectKey>,
     pub(crate) map: IndexMap<MapKey, StackValue, BuildFastHasher>,
     pub(crate) list: Vec<StackValue>,
 }
@@ -101,14 +100,6 @@ impl Table {
         // list
         size += self.list.len() * Self::LIST_ELEMENT_SIZE;
         size
-    }
-
-    pub(crate) fn metatable(&self) -> Option<TableObjectKey> {
-        self.metatable
-    }
-
-    pub(crate) fn set_metatable(&mut self, table_key: Option<TableObjectKey>) {
-        self.metatable = table_key;
     }
 
     pub(crate) fn reserve_list(&mut self, additional: usize) {
@@ -251,13 +242,6 @@ impl Table {
     pub(crate) fn clear(&mut self) {
         self.list.clear();
         self.map.clear();
-    }
-
-    /// Clears all values from the table, incliding metatable
-    pub(crate) fn reset(&mut self) {
-        self.list.clear();
-        self.map.clear();
-        self.metatable = None;
     }
 
     pub(crate) fn next(&self, previous: StackValue) -> Option<(StackValue, StackValue)> {
