@@ -588,20 +588,24 @@ impl VmContext<'_> {
                 }
             }
 
+            let definition = Rc::new(FunctionDefinition {
+                label: label.clone(),
+                env: chunk.env,
+                up_values: chunk.up_values,
+                byte_strings,
+                numbers: chunk.numbers,
+                functions,
+                instructions: chunk.instructions,
+                source_map: chunk.source_map,
+            });
+
+            gc.modify_used_memory(definition.heap_size() as _);
+
             let key = heap.store_interpreted_fn(
                 gc,
                 Function {
                     up_values: up_values.into(),
-                    definition: Rc::new(FunctionDefinition {
-                        label: label.clone(),
-                        env: chunk.env,
-                        up_values: chunk.up_values,
-                        byte_strings,
-                        numbers: chunk.numbers,
-                        functions,
-                        instructions: chunk.instructions,
-                        source_map: chunk.source_map,
-                    }),
+                    definition,
                 },
             );
 

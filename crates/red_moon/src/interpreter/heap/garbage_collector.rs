@@ -382,6 +382,13 @@ impl GarbageCollector {
                         continue;
                     };
                     self.used_memory -= std::mem::size_of_val(&function) + function.heap_size();
+
+                    // see if we should "free" the definition
+                    let definition_key = Rc::as_ptr(&function.definition) as usize;
+
+                    if !self.traversed_definitions.contains(&definition_key) {
+                        self.used_memory -= function.definition.heap_size();
+                    }
                 }
                 StorageKey::Coroutine(key) => {
                     let Some(co) = heap.storage.coroutines.remove(key) else {
