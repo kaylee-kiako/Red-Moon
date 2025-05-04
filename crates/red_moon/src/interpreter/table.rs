@@ -17,14 +17,26 @@ pub(crate) struct MapKey {
     value: u64,
 }
 
+impl MapKey {
+    const VARIANT_NIL: u8 = 0;
+    const VARIANT_BOOL: u8 = 1;
+    const VARIANT_INT: u8 = 2;
+    const VARIANT_FLOAT: u8 = 3;
+    const VARIANT_PTR: u8 = 4;
+    const VARIANT_BYTES: u8 = 5;
+    const VARIANT_TABLE: u8 = 6;
+    const VARIANT_NATIVE_FN: u8 = 7;
+    const VARIANT_FN: u8 = 8;
+    const VARIANT_COROUTINE: u8 = 9;
+}
+
 impl PartialEq for MapKey {
     fn eq(&self, other: &Self) -> bool {
         if self.variant != other.variant {
             return false;
         }
 
-        // float
-        if self.variant == 3 {
+        if self.variant == Self::VARIANT_FLOAT {
             return f64::from_bits(self.value) == f64::from_bits(other.value);
         }
 
@@ -48,16 +60,18 @@ impl From<StackValue> for MapKey {
         }
 
         match value {
-            StackValue::Nil => from_pair(0, 0),
-            StackValue::Bool(b) => from_pair(1, b as _),
-            StackValue::Integer(i) => from_pair(2, i as _),
-            StackValue::Float(f) => from_pair(3, u64::from_ne_bytes(f.to_ne_bytes())),
-            StackValue::Pointer(key) => from_pair(4, key.as_ffi()),
-            StackValue::Bytes(key) => from_pair(5, key.as_ffi()),
-            StackValue::Table(key) => from_pair(6, key.as_ffi()),
-            StackValue::NativeFunction(key) => from_pair(7, key.as_ffi()),
-            StackValue::Function(key) => from_pair(8, key.as_ffi()),
-            StackValue::Coroutine(key) => from_pair(9, key.as_ffi()),
+            StackValue::Nil => from_pair(Self::VARIANT_NIL, 0),
+            StackValue::Bool(b) => from_pair(Self::VARIANT_BOOL, b as _),
+            StackValue::Integer(i) => from_pair(Self::VARIANT_INT, i as _),
+            StackValue::Float(f) => {
+                from_pair(Self::VARIANT_FLOAT, u64::from_ne_bytes(f.to_ne_bytes()))
+            }
+            StackValue::Pointer(key) => from_pair(Self::VARIANT_PTR, key.as_ffi()),
+            StackValue::Bytes(key) => from_pair(Self::VARIANT_BYTES, key.as_ffi()),
+            StackValue::Table(key) => from_pair(Self::VARIANT_TABLE, key.as_ffi()),
+            StackValue::NativeFunction(key) => from_pair(Self::VARIANT_NATIVE_FN, key.as_ffi()),
+            StackValue::Function(key) => from_pair(Self::VARIANT_FN, key.as_ffi()),
+            StackValue::Coroutine(key) => from_pair(Self::VARIANT_COROUTINE, key.as_ffi()),
         }
     }
 }
@@ -65,15 +79,19 @@ impl From<StackValue> for MapKey {
 impl From<&MapKey> for StackValue {
     fn from(key: &MapKey) -> StackValue {
         match key.variant {
-            1 => StackValue::Bool(key.value != 0),
-            2 => StackValue::Integer(key.value as _),
-            3 => StackValue::Float(f64::from_bits(key.value)),
-            4 => StackValue::Pointer(StackObjectKey::from_ffi(key.value)),
-            5 => StackValue::Bytes(BytesObjectKey::from_ffi(key.value)),
-            6 => StackValue::Table(TableObjectKey::from_ffi(key.value)),
-            7 => StackValue::NativeFunction(NativeFnObjectKey::from_ffi(key.value)),
-            8 => StackValue::Function(FnObjectKey::from_ffi(key.value)),
-            9 => StackValue::Coroutine(CoroutineObjectKey::from_ffi(key.value)),
+            MapKey::VARIANT_BOOL => StackValue::Bool(key.value != 0),
+            MapKey::VARIANT_INT => StackValue::Integer(key.value as _),
+            MapKey::VARIANT_FLOAT => StackValue::Float(f64::from_bits(key.value)),
+            MapKey::VARIANT_PTR => StackValue::Pointer(StackObjectKey::from_ffi(key.value)),
+            MapKey::VARIANT_BYTES => StackValue::Bytes(BytesObjectKey::from_ffi(key.value)),
+            MapKey::VARIANT_TABLE => StackValue::Table(TableObjectKey::from_ffi(key.value)),
+            MapKey::VARIANT_NATIVE_FN => {
+                StackValue::NativeFunction(NativeFnObjectKey::from_ffi(key.value))
+            }
+            MapKey::VARIANT_FN => StackValue::Function(FnObjectKey::from_ffi(key.value)),
+            MapKey::VARIANT_COROUTINE => {
+                StackValue::Coroutine(CoroutineObjectKey::from_ffi(key.value))
+            }
             _ => StackValue::Nil,
         }
     }
@@ -232,7 +250,10 @@ impl Table {
 
     fn merge_from_map_into_list(&mut self) {
         let map_index = self.list.len() as i64 + 1;
-        let mut map_key = MapKey::from(StackValue::Integer(map_index));
+        let mut map_key = MapKey {
+            variant: MapKey::VARIANT_INT,
+            value: map_index as _,
+        };
 
         while let Some(value) = self.map.swap_remove(&map_key) {
             self.list.push(value);
