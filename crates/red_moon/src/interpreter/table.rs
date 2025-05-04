@@ -166,6 +166,8 @@ impl Table {
                             return *value;
                         }
                     }
+
+                    return self.get_from_map(StackValue::Integer(i));
                 }
             }
             _ => {}
@@ -196,6 +198,9 @@ impl Table {
                     if i > 0 && self.set_in_list(i as usize - 1, value) {
                         return;
                     }
+
+                    self.set_in_map(StackValue::Integer(i), value);
+                    return;
                 }
             }
             _ => {}

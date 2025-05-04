@@ -101,3 +101,8 @@ print("\nexpression access:")
 a.a = 3
 print((a)[1])
 print((a).a)
+
+print("\nfloat index:")
+a[0.0] = 1
+a[0.2] = 2
+print(a[0], a[0.0], a[0.2])
