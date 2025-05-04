@@ -586,16 +586,16 @@ impl CallContext {
     ) -> Result<CallResult, RuntimeErrorData> {
         let mut for_loop_jump = false;
 
+        if exec_data.tracked_stack_size + Register::MAX as usize > exec_data.limits.stack_size {
+            return Err(RuntimeErrorData::StackOverflow);
+        }
+
         while let Some(&instruction) = self
             .function
             .definition
             .instructions
             .get(self.next_instruction_index)
         {
-            if exec_data.tracked_stack_size + value_stack.len() > exec_data.limits.stack_size {
-                return Err(RuntimeErrorData::StackOverflow);
-            }
-
             #[cfg(feature = "instruction_metrics")]
             let _instruction_tracker = exec_data.instruction_tracking.track(instruction);
 
