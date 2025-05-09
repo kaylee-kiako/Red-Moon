@@ -254,6 +254,12 @@ impl Table {
     }
 
     fn merge_from_map_into_list(&mut self) {
+        if self.map.is_empty() {
+            // quick exit optimization
+            // assumes we usually don't need to merge map data into the list
+            return;
+        }
+
         let map_index = self.list.len() as i64 + 1;
         let mut map_key = MapKey {
             variant: MapKey::VARIANT_INT,
