@@ -720,13 +720,19 @@ where
                             // consume token
                             self.token_iter.next();
 
-                            self.resolve_unsized_exp_list(first_lhs_index)?;
+                            let is_variadic =
+                                |token: &LuaToken| token.label == LuaTokenLabel::TripleDot;
+
+                            let expecting = if lhs_list.last().is_some_and(is_variadic) {
+                                usize::MAX
+                            } else {
+                                lhs_list.len()
+                            };
+
+                            self.resolve_unsized_exp_list(first_lhs_index, expecting)?;
                         } else {
                             let instructions = &mut self.top_function.instructions;
-
-                            for i in 0..(lhs_list.len() as Register) {
-                                instructions.push(Instruction::SetNil(i + first_lhs_index));
-                            }
+                            instructions.push(Instruction::ClearFrom(first_lhs_index));
                         }
 
                         for token in lhs_list {
@@ -1608,15 +1614,17 @@ where
     fn resolve_unsized_exp_list(
         &mut self,
         top_register: Register,
+        expecting: usize,
     ) -> Result<(), LuaCompilationError> {
         let instructions = &mut self.top_function.instructions;
-        instructions.push(Instruction::ClearFrom(top_register));
 
         let Some(next_token) = self.token_iter.peek().cloned().transpose()? else {
+            instructions.push(Instruction::ClearFrom(top_register));
             return Ok(());
         };
 
         if !starts_expression(next_token.label) {
+            instructions.push(Instruction::ClearFrom(top_register));
             return Ok(());
         }
 
@@ -1654,6 +1662,15 @@ where
 
         self.variadic_to_single_static(top_register, first_expression_start..last_expression_start);
 
+        if expecting > i as usize {
+            let range = last_expression_start..self.top_function.instructions.len();
+
+            if !self.contains_variadic(top_register + i - 1, range) {
+                let instructions = &mut self.top_function.instructions;
+                instructions.push(Instruction::ClearFrom(top_register + i));
+            }
+        }
+
         Ok(())
     }
 
@@ -1684,6 +1701,38 @@ where
                 _ => {}
             }
         }
+    }
+
+    // similar to the function above, but returns a bool instead of modifying the instruction
+    fn contains_variadic(&mut self, count_register: Register, range: Range<usize>) -> bool {
+        let instructions = &mut self.top_function.instructions;
+
+        for instruction in &mut instructions[range] {
+            match *instruction {
+                Instruction::Call(_, mode) => {
+                    if mode == ReturnMode::Extend(count_register)
+                        || matches!(mode, ReturnMode::UnsizedDestinationPreserve(_))
+                    {
+                        return true;
+                    }
+                }
+                Instruction::CopyVariadic(_, count_dest, _) => {
+                    // need to test the target in case of nested exp_list
+                    if count_dest == count_register {
+                        return true;
+                    }
+                }
+                Instruction::CopyUnsizedVariadic(dest, _) => {
+                    // need to test the target in case of nested exp_list
+                    if dest == count_register {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        false
     }
 
     /// Returns the register that stores the result
