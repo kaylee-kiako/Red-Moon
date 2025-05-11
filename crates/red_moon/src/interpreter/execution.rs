@@ -188,6 +188,7 @@ impl ExecutionContext {
                                 stack_start + 1,
                                 IllegalInstruction::MissingArgCount,
                             ) {
+                                exec_data.cache_pools.store_multi(args);
                                 return Err(Self::unwind_error(vm, err.into()));
                             };
 
@@ -271,6 +272,7 @@ impl ExecutionContext {
                                         stack_start,
                                         &mut return_values,
                                     ) {
+                                        exec_data.cache_pools.store_multi(return_values);
                                         return Err(Self::unwind_error(vm, err));
                                     }
                                 }
