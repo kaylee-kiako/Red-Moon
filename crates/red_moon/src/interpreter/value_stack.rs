@@ -188,11 +188,7 @@ impl ValueStack {
     }
 
     pub(crate) fn get(&self, index: usize) -> StackValue {
-        if let Some(value) = self.values.get(index) {
-            *value
-        } else {
-            StackValue::Nil
-        }
+        self.values.get(index).cloned().unwrap_or_default()
     }
 
     pub(crate) fn get_deref(&self, heap: &Heap, index: usize) -> StackValue {
