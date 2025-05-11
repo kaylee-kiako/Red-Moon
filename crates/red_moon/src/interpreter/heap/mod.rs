@@ -113,10 +113,19 @@ pub(crate) enum StorageKey {
 }
 
 /// Faster than StorageKey when used as a HashMap Key, since the variant and value can be compared directly
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct FastStorageKey {
     variant: u8,
     value: u64,
+}
+
+impl FastStorageKey {
+    const VARIANT_STACK_VALUE: u8 = 0;
+    const VARIANT_BYTES: u8 = 1;
+    const VARIANT_TABLE: u8 = 2;
+    const VARIANT_NATIVE_FN: u8 = 3;
+    const VARIANT_FN: u8 = 4;
+    const VARIANT_COROUTINE: u8 = 5;
 }
 
 impl From<StorageKey> for FastStorageKey {
@@ -126,12 +135,32 @@ impl From<StorageKey> for FastStorageKey {
         }
 
         match value {
-            StorageKey::StackValue(key) => from_pair(0, key.as_ffi()),
-            StorageKey::Bytes(key) => from_pair(1, key.as_ffi()),
-            StorageKey::Table(key) => from_pair(2, key.as_ffi()),
-            StorageKey::NativeFunction(key) => from_pair(3, key.as_ffi()),
-            StorageKey::Function(key) => from_pair(4, key.as_ffi()),
-            StorageKey::Coroutine(key) => from_pair(5, key.as_ffi()),
+            StorageKey::StackValue(key) => from_pair(Self::VARIANT_STACK_VALUE, key.as_ffi()),
+            StorageKey::Bytes(key) => from_pair(Self::VARIANT_BYTES, key.as_ffi()),
+            StorageKey::Table(key) => from_pair(Self::VARIANT_TABLE, key.as_ffi()),
+            StorageKey::NativeFunction(key) => from_pair(Self::VARIANT_NATIVE_FN, key.as_ffi()),
+            StorageKey::Function(key) => from_pair(Self::VARIANT_FN, key.as_ffi()),
+            StorageKey::Coroutine(key) => from_pair(Self::VARIANT_COROUTINE, key.as_ffi()),
+        }
+    }
+}
+
+impl From<FastStorageKey> for StorageKey {
+    fn from(key: FastStorageKey) -> Self {
+        match key.variant {
+            FastStorageKey::VARIANT_STACK_VALUE => {
+                StorageKey::StackValue(StackObjectKey::from_ffi(key.value))
+            }
+            FastStorageKey::VARIANT_BYTES => StorageKey::Bytes(BytesObjectKey::from_ffi(key.value)),
+            FastStorageKey::VARIANT_TABLE => StorageKey::Table(TableObjectKey::from_ffi(key.value)),
+            FastStorageKey::VARIANT_NATIVE_FN => {
+                StorageKey::NativeFunction(NativeFnObjectKey::from_ffi(key.value))
+            }
+            FastStorageKey::VARIANT_FN => StorageKey::Function(FnObjectKey::from_ffi(key.value)),
+            FastStorageKey::VARIANT_COROUTINE => {
+                StorageKey::Coroutine(CoroutineObjectKey::from_ffi(key.value))
+            }
+            _ => unreachable!(),
         }
     }
 }
@@ -139,7 +168,7 @@ impl From<StorageKey> for FastStorageKey {
 pub(crate) struct Heap {
     pub(crate) storage: Storage,
     pub(crate) byte_strings: FastHashMap<ByteString, BytesObjectKey>,
-    pub(crate) ref_roots: IndexMap<StorageKey, RefCounter, BuildFastHasher>,
+    pub(crate) ref_roots: IndexMap<FastStorageKey, RefCounter, BuildFastHasher>,
     #[cfg(feature = "serde")]
     pub(crate) tags: IndexMap<StackValue, NativeFnObjectKey, BuildFastHasher>,
     pub(crate) resume_callbacks: FastHashMap<
@@ -187,10 +216,13 @@ impl Heap {
         gc.modify_used_memory((string_metatable.heap_size() + std::mem::size_of::<Table>()) as _);
         let string_metatable_key = storage.tables.insert(string_metatable);
 
-        let mut ref_roots = IndexMap::<StorageKey, RefCounter, BuildFastHasher>::default();
+        let mut ref_roots = IndexMap::<FastStorageKey, RefCounter, BuildFastHasher>::default();
         let ref_counter = RefCounter::default();
         let counter_ref = ref_counter.create_counter_ref();
-        ref_roots.insert(StorageKey::Table(string_metatable_key), ref_counter.clone());
+        ref_roots.insert(
+            StorageKey::Table(string_metatable_key).into(),
+            ref_counter.clone(),
+        );
 
         let string_metatable_ref = HeapRef {
             key: string_metatable_key,
@@ -271,8 +303,8 @@ impl Heap {
     }
 
     pub(crate) fn create_ref<K: Copy + Into<StorageKey>>(&mut self, key: K) -> HeapRef<K> {
-        let storage_key = key.into();
-        let counter_ref = match self.ref_roots.entry(storage_key) {
+        let storage_key: StorageKey = key.into();
+        let counter_ref = match self.ref_roots.entry(storage_key.into()) {
             indexmap::map::Entry::Occupied(entry) => entry.get().create_counter_ref(),
             indexmap::map::Entry::Vacant(entry) => {
                 let ref_counter = RefCounter::default();

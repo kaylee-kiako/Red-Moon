@@ -599,9 +599,9 @@ impl GarbageCollector {
         }
     }
 
-    fn mark_heap_key_root(&mut self, key: StorageKey) {
-        self.marked.insert(key.into(), Mark::Gray);
-        self.phase_queue.push(key);
+    fn mark_heap_key_root(&mut self, key: FastStorageKey) {
+        self.marked.insert(key, Mark::Gray);
+        self.phase_queue.push(key.into());
     }
 
     fn acknowledge_weak_association(
