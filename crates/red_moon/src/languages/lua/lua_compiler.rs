@@ -1398,9 +1398,6 @@ where
                         // init prep multi, dummy value for count constant
                         instructions.push(Instruction::PrepMulti(top_register + 1, 0));
 
-                        // copy the table into args
-                        instructions.push(Instruction::Copy(top_register + 2, top_register));
-
                         // resolve the remaining args
                         let total = self.resolve_partially_consumed_exp_list(
                             top_register + 1,
@@ -1428,7 +1425,6 @@ where
                                 .register_number(self.source, next_token, 2)?;
                         let instructions = &mut self.top_function.instructions;
                         instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
-                        instructions.push(Instruction::Copy(top_register + 2, top_register));
                         instructions.push(Instruction::LoadBytes(top_register + 3, string_index));
                     }
                     LuaTokenLabel::OpenCurly => {
@@ -1438,7 +1434,6 @@ where
 
                         let instructions = &mut self.top_function.instructions;
                         instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
-                        instructions.push(Instruction::Copy(top_register + 2, top_register));
 
                         self.resolve_table(top_register + 3)?;
                     }
@@ -1454,9 +1449,8 @@ where
                     .map_following_instructions(self.source, next_token.offset);
 
                 let instructions = &mut self.top_function.instructions;
-                // load function
-                instructions.push(Instruction::CopyTableField(top_register, top_register + 2));
-                instructions.push(Instruction::Constant(string_index));
+                // prep self
+                instructions.push(Instruction::PrepSelf(top_register, string_index));
                 // call function
                 call_instruction_index = instructions.len();
                 instructions.push(Instruction::Call(top_register, return_mode));

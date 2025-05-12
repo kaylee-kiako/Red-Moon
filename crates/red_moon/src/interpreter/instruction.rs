@@ -103,6 +103,11 @@ pub enum Instruction {
     /// (dest, index)
     PrepMulti(Register, ConstantIndex),
 
+    /// Moves a table at the dest two registers to the right, copies a field from that table into the dest
+    ///
+    /// (dest, bytes_index)
+    PrepSelf(Register, ConstantIndex),
+
     /// Creates a table, reserves space for the list part of the table
     ///
     /// (dest, reserve_index)
@@ -312,6 +317,7 @@ impl Instruction {
             Instruction::LoadBytes(_, _) => "LoadBytes",
             Instruction::ClearFrom(_) => "ClearFrom",
             Instruction::PrepMulti(_, _) => "PrepMulti",
+            Instruction::PrepSelf(_, _) => "PrepSelf",
             Instruction::CreateTable(_, _) => "CreateTable",
             Instruction::FlushToTable(_, _, _) => "FlushToTable",
             Instruction::VariadicToTable(_, _, _) => "VariadicToTable",

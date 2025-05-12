@@ -655,6 +655,29 @@ impl CallContext {
                     value_stack.set(dest_index, value);
                     value_stack.resize(dest_index + 1);
                 }
+                Instruction::PrepSelf(dest, bytes_index) => {
+                    let definition = &self.function.definition;
+                    let Some(&bytes_key) = definition.byte_strings.get(bytes_index as usize) else {
+                        return Err(
+                            IllegalInstruction::MissingByteStringConstant(bytes_index).into()
+                        );
+                    };
+
+                    let dest_index = self.register_base + dest as usize;
+                    let base = value_stack.get_deref(heap, dest_index);
+                    value_stack.set(dest_index + 2, base);
+
+                    if let Some(call_result) = self.copy_from_table(
+                        exec_data,
+                        value_stack,
+                        dest,
+                        base,
+                        bytes_key.into(),
+                        |table, key| table.get_from_map(key),
+                    )? {
+                        return Ok(call_result);
+                    }
+                }
                 Instruction::CreateTable(dest, len_index) => {
                     let definition = &self.function.definition;
                     let Some(&len) = definition.numbers.get(len_index as usize) else {
