@@ -300,7 +300,7 @@ pub enum Instruction {
     /// (register, return_mode)
     Call(Register, ReturnMode),
 
-    /// Expects: return count, ...value, at the speicified register
+    /// Expects: return count, ...value, at the specified register
     ///
     /// (register)
     Return(Register),
