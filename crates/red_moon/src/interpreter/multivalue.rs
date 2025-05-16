@@ -3,7 +3,7 @@ use super::heap::Heap;
 use super::value_stack::{StackValue, ValueStack};
 use super::vm::VmContext;
 use super::{ForEachValue, FromValues, Value};
-use crate::errors::{IllegalInstruction, RuntimeError};
+use crate::errors::RuntimeError;
 use thin_vec::ThinVec;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,35 +91,6 @@ impl MultiValue<Value> {
         );
 
         multi
-    }
-
-    /// Copies values from a ValueStack
-    pub(crate) fn copy_stack_multi(
-        &mut self,
-        heap: &mut Heap,
-        value_stack: &mut ValueStack,
-        len_index: usize,
-        missing_count_err: IllegalInstruction,
-    ) -> Result<(), IllegalInstruction> {
-        let StackValue::Integer(arg_count) = value_stack.get(len_index) else {
-            return Err(missing_count_err);
-        };
-
-        // relying on the function_rev_index calculation as the verification for this
-        let arg_count = arg_count as usize;
-
-        let start = len_index + 1;
-        let end = start + arg_count;
-
-        self.values.extend(
-            value_stack
-                .get_slice(start..end)
-                .iter()
-                .rev()
-                .map(|&value| Value::from_stack_value(heap, value)),
-        );
-
-        Ok(())
     }
 
     /// Pushes values into a ValueStack, places an integer storing the length first

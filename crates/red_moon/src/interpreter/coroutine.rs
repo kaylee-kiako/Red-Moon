@@ -138,7 +138,7 @@ impl Coroutine {
             };
 
             match result {
-                Ok(values) => args = values,
+                Ok(values) => args = values.unpack(ctx).unwrap(),
                 Err(mut err) => {
                     let vm = &mut *ctx.vm;
 
@@ -283,7 +283,7 @@ impl Coroutine {
                     }) {
                         Ok(values) => {
                             // converted to Ok ("pcall"-like function)
-                            return Ok(values);
+                            return Ok(values.unpack(ctx).unwrap());
                         }
                         Err(new_err) => {
                             err = new_err;

@@ -3,8 +3,8 @@ use super::heap::{BytesObjectKey, Heap, StorageKey};
 use super::value_stack::StackValue;
 use super::vm::VmContext;
 use super::{
-    ByteString, CoroutineRef, ForEachValue, FromValues, FunctionRef, Number, StringRef, TableRef,
-    MultiValue,
+    ByteString, CoroutineRef, ForEachValue, FromValues, FunctionRef, MultiValue, Number, StringRef,
+    TableRef,
 };
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use crate::languages::lua::parse_number;
@@ -177,8 +177,8 @@ impl Value {
             value.test_validity(&ctx.vm.execution_data.heap)?;
         }
 
-        let mut variadic = ExecutionContext::call_value(self.to_stack_value(), args, ctx.vm)?;
-        R::from_values(ctx, |_| variadic.pop_front())
+        let return_values = ExecutionContext::call_value(self.to_stack_value(), args, ctx.vm)?;
+        return_values.unpack(ctx)
     }
 
     #[inline]

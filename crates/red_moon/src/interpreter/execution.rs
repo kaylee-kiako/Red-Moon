@@ -7,7 +7,7 @@ use super::native_function::NativeCallContext;
 use super::table::Table;
 use super::value_stack::{StackValue, ValueStack};
 use super::vm::{ExecutionAccessibleData, Vm};
-use super::{TypeName, UpValueSource, Value, VmContext};
+use super::{FromValues, TypeName, UpValueSource, Value, VmContext};
 use crate::errors::{IllegalInstruction, RuntimeError, RuntimeErrorData};
 use crate::languages::lua::coerce_integer;
 use std::borrow::Cow;
@@ -43,7 +43,7 @@ impl ExecutionContext {
         function_key: FnObjectKey,
         args: MultiValue,
         vm: &mut Vm,
-    ) -> Result<MultiValue, RuntimeError> {
+    ) -> Result<ExecutionReturnValues, RuntimeError> {
         let exec_data = &mut vm.execution_data;
         let mut value_stack = exec_data.cache_pools.create_value_stack();
 
@@ -81,7 +81,7 @@ impl ExecutionContext {
         function_key: NativeFnObjectKey,
         args: MultiValue,
         vm: &mut Vm,
-    ) -> Result<MultiValue, RuntimeError> {
+    ) -> Result<ExecutionReturnValues, RuntimeError> {
         let exec_data = &mut vm.execution_data;
 
         let Some(function) = exec_data.heap.get_native_fn(function_key) else {
@@ -102,7 +102,7 @@ impl ExecutionContext {
             NativeCallContext,
             &mut VmContext,
         ) -> Result<NativeCallContext, RuntimeError>,
-    ) -> Result<MultiValue, RuntimeError> {
+    ) -> Result<ExecutionReturnValues, RuntimeError> {
         let exec_data = &mut vm.execution_data;
         let mut value_stack = exec_data.cache_pools.create_value_stack();
 
@@ -142,28 +142,19 @@ impl ExecutionContext {
             }
         }
 
-        let mut execution = vm.execution_stack.pop().unwrap();
-        let exec_data = &mut vm.execution_data;
-        let mut return_values = exec_data.cache_pools.create_multi();
+        let execution = vm.execution_stack.pop().unwrap();
 
-        return_values.copy_stack_multi(
-            &mut exec_data.heap,
-            &mut execution.value_stack,
-            return_count_index,
-            IllegalInstruction::MissingReturnCount,
-        )?;
-
-        let cache_pools = &mut exec_data.cache_pools;
-        cache_pools.store_value_stack(execution.value_stack);
-
-        Ok(return_values)
+        Ok(ExecutionReturnValues {
+            value_stack: execution.value_stack,
+            count_register: return_count_index,
+        })
     }
 
     pub(crate) fn call_value(
         value: StackValue,
         mut args: MultiValue,
         vm: &mut Vm,
-    ) -> Result<MultiValue, RuntimeError> {
+    ) -> Result<ExecutionReturnValues, RuntimeError> {
         let exec_data = &mut vm.execution_data;
 
         let function_value = resolve_call(exec_data, value, |heap, value| {
@@ -177,15 +168,13 @@ impl ExecutionContext {
         }
     }
 
-    pub(crate) fn resume(vm: &mut Vm) -> Result<MultiValue, RuntimeError> {
+    pub(crate) fn resume(vm: &mut Vm) -> Result<ExecutionReturnValues, RuntimeError> {
         let coroutine_data = &vm.execution_data.coroutine_data;
         if !coroutine_data.in_progress_yield.is_empty() {
             return Err(RuntimeErrorData::UnhandledYield.into());
         }
 
         let mut execution = vm.execution_stack.last_mut().unwrap();
-
-        let mut returning_definition = None;
 
         while let Some(interpreter) = execution.interpreter_stack.last_mut() {
             let exec_data = &mut vm.execution_data;
@@ -410,8 +399,6 @@ impl ExecutionContext {
 
                         return Err(Self::unwind_error(vm, err));
                     }
-
-                    returning_definition = Some(interpreter.function.definition);
                 }
                 CallResult::StepGc => {
                     exec_data.gc.step(
@@ -427,33 +414,12 @@ impl ExecutionContext {
             }
         }
 
-        let exec_data = &mut vm.execution_data;
-        let cache_pools = &mut exec_data.cache_pools;
-        let mut execution = vm.execution_stack.pop().unwrap();
-        let mut return_values = cache_pools.create_multi();
+        let execution = vm.execution_stack.pop().unwrap();
 
-        if let Err(err) = return_values.copy_stack_multi(
-            &mut exec_data.heap,
-            &mut execution.value_stack,
-            0,
-            IllegalInstruction::MissingReturnCount,
-        ) {
-            let mut err: RuntimeError = err.into();
-
-            if let Some(definition) = returning_definition {
-                let instruction_index = definition.instructions.len().saturating_sub(1);
-                let frame = definition.create_stack_trace_frame(instruction_index);
-                err.trace.push_frame(frame);
-            }
-
-            cache_pools.store_value_stack(execution.value_stack);
-
-            return Err(err);
-        };
-
-        cache_pools.store_value_stack(execution.value_stack);
-
-        Ok(return_values)
+        Ok(ExecutionReturnValues {
+            value_stack: execution.value_stack,
+            count_register: 0,
+        })
     }
 
     fn handle_return(
@@ -579,6 +545,43 @@ impl ExecutionContext {
         cache_pools.store_value_stack(execution.value_stack);
 
         err
+    }
+}
+
+pub(crate) struct ExecutionReturnValues {
+    value_stack: ValueStack,
+    count_register: usize,
+}
+
+impl ExecutionReturnValues {
+    pub(crate) fn unpack<R: FromValues>(self, ctx: &mut VmContext) -> Result<R, RuntimeError> {
+        let StackValue::Integer(return_count) = self.value_stack.get(self.count_register) else {
+            return Err(IllegalInstruction::MissingReturnCount.into());
+        };
+
+        let mut index = self.count_register + 1;
+        let end = index + return_count as usize;
+
+        let r = R::from_values(ctx, |ctx| {
+            let value = if index < end {
+                let heap = &mut ctx.vm.execution_data.heap;
+                let stack_value = self.value_stack.get(index);
+                Some(Value::from_stack_value(heap, stack_value))
+            } else {
+                None
+            };
+
+            index += 1;
+
+            value
+        });
+
+        ctx.vm
+            .execution_data
+            .cache_pools
+            .store_value_stack(self.value_stack);
+
+        r
     }
 }
 

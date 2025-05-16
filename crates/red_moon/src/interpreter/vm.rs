@@ -986,16 +986,12 @@ impl VmContext<'_> {
             value.test_validity(heap)?;
         }
 
-        let mut multi = match function_value {
+        let return_values = match function_value {
             StackValue::NativeFunction(key) => ExecutionContext::call_native_fn(key, args, self.vm),
             StackValue::Function(key) => ExecutionContext::call_interpreted(key, args, self.vm),
             _ => ExecutionContext::call_value(function_value, args, self.vm),
         }?;
 
-        let r = R::from_values(self, |_| multi.pop_front());
-
-        self.vm.store_multi(multi);
-
-        r
+        return_values.unpack(self)
     }
 }
