@@ -1,11 +1,11 @@
 use crate::errors::RuntimeError;
-use crate::interpreter::{ByteString, FromValue, MultiValue, TableRef, Value, VmContext};
+use crate::interpreter::{ByteString, FromValue, TableRef, Value, VmContext};
 
 pub fn impl_table(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // concat
-    let concat = ctx.create_function(|args, ctx| {
+    let concat = ctx.create_function(|call_ctx, ctx| {
         let (table, separator, start, end): (TableRef, Option<ByteString>, i64, i64) =
-            args.unpack_args(ctx)?;
+            call_ctx.get_args(ctx)?;
 
         let mut bytes = Vec::<u8>::new();
 
@@ -40,13 +40,13 @@ pub fn impl_table(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             }
         }
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     let rehydrating = concat.rehydrate("table.concat", ctx)?;
 
     // insert
-    let insert = ctx.create_function(|args, ctx| {
-        let (table, middle, last): (TableRef, Value, Value) = args.unpack_args(ctx)?;
+    let insert = ctx.create_function(|call_ctx, ctx| {
+        let (table, middle, last): (TableRef, Value, Value) = call_ctx.get_args(ctx)?;
 
         if last.is_nil() {
             let index = table.raw_len(ctx)?;
@@ -61,59 +61,55 @@ pub fn impl_table(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             table.raw_insert(index, last, ctx).map_err(map_err)?;
         }
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     insert.rehydrate("table.insert", ctx)?;
 
     // remove
-    let remove = ctx.create_function(|args, ctx| {
-        let (table, index): (TableRef, i64) = args.unpack_args(ctx)?;
+    let remove = ctx.create_function(|call_ctx, ctx| {
+        let (table, index): (TableRef, i64) = call_ctx.get_args(ctx)?;
 
         let len = table.raw_len(ctx)?;
 
         // lua allows for `#table + 1`
         if index == len as i64 + 1 {
-            return MultiValue::pack((), ctx);
+            return Ok(());
         }
 
         // lua allows index to be 0 when the table len is 0
         if len == 0 && index == 0 {
-            return MultiValue::pack((), ctx);
+            return Ok(());
         }
 
         table.raw_remove::<Value>(index, ctx)?;
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     remove.rehydrate("table.remove", ctx)?;
 
     // pack
-    let pack = ctx.create_function(|mut args, ctx| {
+    let pack = ctx.create_function(|call_ctx, ctx| {
         let table = ctx.create_table();
 
-        let mut index = 1;
-
-        while let Some(value) = args.pop_front() {
-            table.raw_insert(index, value, ctx)?;
-            index += 1;
+        for i in 0..call_ctx.arg_count() {
+            let value: Value = call_ctx.get_arg(i, ctx)?;
+            table.raw_insert((i + 1) as _, value, ctx)?;
         }
 
-        MultiValue::pack(table, ctx)
+        Ok(())
     });
     pack.rehydrate("table.pack", ctx)?;
 
     // unpack
-    let unpack = ctx.create_function(|args, ctx| {
-        let table: TableRef = args.unpack_args(ctx)?;
+    let unpack = ctx.create_function(|call_ctx, ctx| {
+        let table: TableRef = call_ctx.get_args(ctx)?;
 
-        let mut multi = ctx.create_multi();
-
-        for index in (1..=table.raw_len(ctx)?).rev() {
-            let value = table.raw_get(index, ctx)?;
-            multi.push_front(value);
+        for index in 1..=table.raw_len(ctx)? {
+            let value: Value = table.raw_get(index, ctx)?;
+            call_ctx.return_values(value, ctx)?;
         }
 
-        MultiValue::pack(multi, ctx)
+        Ok(())
     });
     unpack.rehydrate("table.unpack", ctx)?;
 

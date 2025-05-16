@@ -1,40 +1,41 @@
 use crate::errors::RuntimeError;
-use crate::interpreter::{IntoValue, MultiValue, Number, Value, VmContext};
+use crate::interpreter::{IntoValue, NativeCallContext, Number, Value, VmContext};
 use crate::languages::lua::{coerce_integer, parse_number};
 
 pub fn impl_math(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // abs
-    let abs = ctx.create_function(|mut args, ctx| {
-        let x = coerce_number(&mut args, 1, ctx)?;
+    let abs = ctx.create_function(|call_ctx, ctx| {
+        let x = coerce_number(call_ctx, 1, ctx)?;
 
-        args.push_front(match x {
-            Number::Integer(i) => i.abs().into_value(ctx)?,
-            Number::Float(f) => f.abs().into_value(ctx)?,
-        });
-
-        Ok(args)
+        call_ctx.return_values(
+            match x {
+                Number::Integer(i) => i.abs().into_value(ctx)?,
+                Number::Float(f) => f.abs().into_value(ctx)?,
+            },
+            ctx,
+        )
     });
     let rehydrating = abs.rehydrate("math.abs", ctx)?;
 
     // acos
-    let acos = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let acos = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(x.acos(), ctx)
+        call_ctx.return_values(x.acos(), ctx)
     });
     acos.rehydrate("math.acos", ctx)?;
 
     // asin
-    let asin = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let asin = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(x.asin(), ctx)
+        call_ctx.return_values(x.asin(), ctx)
     });
     asin.rehydrate("math.asin", ctx)?;
 
     // atan
-    let atan = ctx.create_function(|args, ctx| {
-        let (y, x): (f64, Option<f64>) = args.unpack_args(ctx)?;
+    let atan = ctx.create_function(|call_ctx, ctx| {
+        let (y, x): (f64, Option<f64>) = call_ctx.get_args(ctx)?;
 
         let output = if let Some(x) = x {
             y.atan2(x)
@@ -42,53 +43,53 @@ pub fn impl_math(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             y.atan()
         };
 
-        MultiValue::pack(output, ctx)
+        call_ctx.return_values(output, ctx)
     });
     atan.rehydrate("math.atan", ctx)?;
 
     // ceil
-    let ceil = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let ceil = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(truncated_to_value(x.ceil()), ctx)
+        call_ctx.return_values(truncated_to_value(x.ceil()), ctx)
     });
     ceil.rehydrate("math.ceil", ctx)?;
 
     // cos
-    let cos = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let cos = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(x.cos(), ctx)
+        call_ctx.return_values(x.cos(), ctx)
     });
     cos.rehydrate("math.cos", ctx)?;
 
     // deg
-    let deg = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let deg = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(x.to_degrees(), ctx)
+        call_ctx.return_values(x.to_degrees(), ctx)
     });
     deg.rehydrate("math.deg", ctx)?;
 
     // exp
-    let exp = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let exp = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(x.exp(), ctx)
+        call_ctx.return_values(x.exp(), ctx)
     });
     exp.rehydrate("math.exp", ctx)?;
 
     // floor
-    let floor = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
+    let floor = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(truncated_to_value(x.floor()), ctx)
+        call_ctx.return_values(truncated_to_value(x.floor()), ctx)
     });
     floor.rehydrate("math.floor", ctx)?;
 
     // fmod
-    let fmod = ctx.create_function(|args, ctx| {
-        let (x, y): (Number, Number) = args.unpack_args(ctx)?;
+    let fmod = ctx.create_function(|call_ctx, ctx| {
+        let (x, y): (Number, Number) = call_ctx.get_args(ctx)?;
 
         match (x, y) {
             (Number::Integer(x), Number::Integer(y)) => {
@@ -99,136 +100,136 @@ pub fn impl_math(ctx: &mut VmContext) -> Result<(), RuntimeError> {
                     ));
                 }
 
-                MultiValue::pack(x % y, ctx)
+                call_ctx.return_values(x % y, ctx)
             }
-            (Number::Integer(x), Number::Float(y)) => MultiValue::pack(x as f64 % y, ctx),
-            (Number::Float(x), Number::Integer(y)) => MultiValue::pack(x % y as f64, ctx),
-            (Number::Float(x), Number::Float(y)) => MultiValue::pack(x % y, ctx),
+            (Number::Integer(x), Number::Float(y)) => call_ctx.return_values(x as f64 % y, ctx),
+            (Number::Float(x), Number::Integer(y)) => call_ctx.return_values(x % y as f64, ctx),
+            (Number::Float(x), Number::Float(y)) => call_ctx.return_values(x % y, ctx),
         }
     });
     fmod.rehydrate("math.fmod", ctx)?;
 
     // log
-    let log = ctx.create_function(|args, ctx| {
-        let (x, base): (f64, Option<f64>) = args.unpack_args(ctx)?;
+    let log = ctx.create_function(|call_ctx, ctx| {
+        let (x, base): (f64, Option<f64>) = call_ctx.get_args(ctx)?;
         let base = base.unwrap_or(std::f64::consts::E);
 
-        MultiValue::pack(x.log(base), ctx)
+        call_ctx.return_values(x.log(base), ctx)
     });
     log.rehydrate("math.log", ctx)?;
 
     // max
-    let max = ctx.create_function(|mut args, ctx| {
-        let Some(mut max) = args.pop_front() else {
-            ctx.store_multi(args);
-
+    let max = ctx.create_function(|call_ctx, ctx| {
+        let Some(mut max): Option<Value> = call_ctx.get_arg(0, ctx)? else {
             return Err(RuntimeError::new_bad_argument(
                 1,
                 RuntimeError::new_static_string("value expected"),
             ));
         };
 
-        while let Some(arg) = args.pop_front() {
+        for i in 1..call_ctx.arg_count() {
+            let arg: Value = call_ctx.get_arg(i, ctx)?;
+
             if arg.is_greater_than(&max, ctx)? {
                 max = arg;
             }
         }
 
-        args.push_front(max);
-        Ok(args)
+        call_ctx.return_values(max, ctx)
     });
     max.rehydrate("math.max", ctx)?;
 
     // min
-    let min = ctx.create_function(|mut args, ctx| {
-        let Some(mut min) = args.pop_front() else {
-            ctx.store_multi(args);
-
+    let min = ctx.create_function(|call_ctx, ctx| {
+        let Some(mut min): Option<Value> = call_ctx.get_arg(0, ctx)? else {
             return Err(RuntimeError::new_bad_argument(
                 1,
                 RuntimeError::new_static_string("value expected"),
             ));
         };
 
-        while let Some(arg) = args.pop_front() {
+        for i in 1..call_ctx.arg_count() {
+            let arg: Value = call_ctx.get_arg(i, ctx)?;
+
             if arg.is_less_than(&min, ctx)? {
                 min = arg;
             }
         }
 
-        args.push_front(min);
-        Ok(args)
+        call_ctx.return_values(min, ctx)
     });
     min.rehydrate("math.min", ctx)?;
 
     // modf
-    let modf = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
-        MultiValue::pack((truncated_to_value(x.trunc()), x.fract()), ctx)
+    let modf = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
+        call_ctx.return_values((truncated_to_value(x.trunc()), x.fract()), ctx)
     });
     modf.rehydrate("math.modf", ctx)?;
 
     // rad
-    let rad = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
-        MultiValue::pack(x.to_radians(), ctx)
+    let rad = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
+        call_ctx.return_values(x.to_radians(), ctx)
     });
     rad.rehydrate("math.rad", ctx)?;
 
     // sin
-    let sin = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
-        MultiValue::pack(x.sin(), ctx)
+    let sin = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
+        call_ctx.return_values(x.sin(), ctx)
     });
     sin.rehydrate("math.sin", ctx)?;
 
     // sqrt
-    let sqrt = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
-        MultiValue::pack(x.sqrt(), ctx)
+    let sqrt = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
+        call_ctx.return_values(x.sqrt(), ctx)
     });
     sqrt.rehydrate("math.sqrt", ctx)?;
 
     // tan
-    let tan = ctx.create_function(|args, ctx| {
-        let x: f64 = args.unpack_args(ctx)?;
-        MultiValue::pack(x.tan(), ctx)
+    let tan = ctx.create_function(|call_ctx, ctx| {
+        let x: f64 = call_ctx.get_args(ctx)?;
+        call_ctx.return_values(x.tan(), ctx)
     });
     tan.rehydrate("math.tan", ctx)?;
 
     // tointeger
-    let tointeger = ctx.create_function(|mut args, ctx| {
-        let x = coerce_number(&mut args, 1, ctx)?;
+    let tointeger = ctx.create_function(|call_ctx, ctx| {
+        let x = coerce_number(call_ctx, 1, ctx)?;
 
-        args.push_front(match x {
-            Number::Integer(i) => i.into_value(ctx)?,
-            Number::Float(f) => coerce_integer(f).into_value(ctx)?,
-        });
-
-        Ok(args)
+        call_ctx.return_values(
+            match x {
+                Number::Integer(i) => i.into_value(ctx)?,
+                Number::Float(f) => coerce_integer(f).into_value(ctx)?,
+            },
+            ctx,
+        )
     });
     tointeger.rehydrate("math.tointeger", ctx)?;
 
     // type
     let integer_string_ref = ctx.intern_string(b"integer");
     let float_string_ref = ctx.intern_string(b"float");
-    let r#type = ctx.create_function(move |mut args, ctx| {
-        let x = coerce_number(&mut args, 1, ctx)?;
+    let r#type = ctx.create_function(move |call_ctx, ctx| {
+        let x = coerce_number(call_ctx, 1, ctx)?;
 
-        args.push_front(match x {
-            Number::Integer(_) => integer_string_ref.clone().into_value(ctx)?,
-            Number::Float(_) => float_string_ref.clone().into_value(ctx)?,
-        });
-
-        Ok(args)
+        call_ctx.return_values(
+            match x {
+                Number::Integer(_) => integer_string_ref.clone().into_value(ctx)?,
+                Number::Float(_) => float_string_ref.clone().into_value(ctx)?,
+            },
+            ctx,
+        )
     });
     r#type.rehydrate("math.type", ctx)?;
 
     // ult
-    let ult = ctx.create_function(move |args, ctx| {
-        let (m, n): (i64, i64) = args.unpack_args(ctx)?;
+    let ult = ctx.create_function(move |call_ctx, ctx| {
+        let (m, n): (i64, i64) = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(m < n, ctx)
+        call_ctx.return_values(m < n, ctx)
     });
     ult.rehydrate("math.ult", ctx)?;
 
@@ -270,11 +271,11 @@ pub fn impl_math(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 }
 
 fn coerce_number(
-    args: &mut MultiValue,
+    args: &mut NativeCallContext,
     position: usize,
     ctx: &mut VmContext,
 ) -> Result<Number, RuntimeError> {
-    let Some(value) = args.pop_front() else {
+    let Some(value): Option<Value> = args.get_arg(position - 1, ctx)? else {
         return Err(RuntimeError::new_bad_argument(
             position,
             RuntimeError::new_static_string("number expected, got no value"),

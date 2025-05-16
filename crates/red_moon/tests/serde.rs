@@ -18,14 +18,13 @@ fn create_vm() -> Result<Vm, RuntimeError> {
     ctx.create_table();
 
     // create resumable native function
-    let resumable = ctx.create_resumable_function(|(result, _), ctx| {
-        let mut args = result?;
-        args.clear();
+    let resumable = ctx.create_resumable_function(|(_, result, _), ctx| {
+        result?;
 
         // store "resumed" in state
         ctx.resume_call_with_state("resumed")?;
 
-        Err(RuntimeErrorData::Yield(args).into())
+        Err(RuntimeErrorData::Yield(ctx.create_multi()).into())
     });
 
     assert!(!resumable.rehydrate("resumable_fn", ctx)?);
@@ -52,7 +51,10 @@ fn create_vm() -> Result<Vm, RuntimeError> {
         .call::<_, ()>((), ctx)?;
 
     // create native function
-    let f = ctx.create_function(|args, _| Ok(args));
+    let f = ctx.create_function(|call_ctx, ctx| {
+        call_ctx.return_args(.., ctx);
+        Ok(())
+    });
 
     assert!(!f.rehydrate("hydrated_fn", ctx)?);
     env.set("native_fn", f, ctx)?;
@@ -89,12 +91,16 @@ fn test_vm(vm: &mut Vm) -> Result<(), RuntimeError> {
         .is_err_and(|err| err.data == RuntimeErrorData::FunctionLostInSerialization));
 
     // rehydrate
-    let f = ctx.create_function(|args, _| Ok(args));
+    let f = ctx.create_function(|call_ctx, ctx| {
+        call_ctx.return_args(.., ctx);
+        Ok(())
+    });
     assert!(f.rehydrate("hydrated_fn", ctx)?);
     assert_eq!(f.call::<_, MultiValue>(1, ctx)?, MultiValue::pack(1, ctx)?);
 
     // test resumable, expecting "resumed" to be stored in state
-    let resumable = ctx.create_resumable_function(|(_, state), _| Ok(state));
+    let resumable = ctx
+        .create_resumable_function(|(call_ctx, _, state), ctx| call_ctx.return_values(state, ctx));
     assert!(resumable.rehydrate("resumable_fn", ctx)?);
 
     let co: CoroutineRef = env.get("co", ctx)?;

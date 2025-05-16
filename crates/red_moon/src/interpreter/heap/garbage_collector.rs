@@ -253,7 +253,7 @@ impl GarbageCollector {
                     self.mark_storage_key(key.into());
                     self.mark_value_stack(state);
                 }
-                Continuation::Execution { execution, .. } => self.mark_execution_context(execution),
+                Continuation::Execution(execution) => self.mark_execution_context(execution),
             }
         }
     }
@@ -261,8 +261,8 @@ impl GarbageCollector {
     fn mark_execution_context(&mut self, execution: &ExecutionContext) {
         self.mark_value_stack(&execution.value_stack);
 
-        for call in &execution.call_stack {
-            self.mark_up_values(&call.function.up_values)
+        for interpreter in &execution.interpreter_stack {
+            self.mark_up_values(&interpreter.function.up_values)
         }
     }
 
@@ -582,7 +582,7 @@ impl GarbageCollector {
                             self.mark_storage_key(key.into());
                             self.mark_value_stack(state);
                         }
-                        Continuation::Execution { execution, .. } => {
+                        Continuation::Execution(execution) => {
                             self.mark_execution_context(execution)
                         }
                     }

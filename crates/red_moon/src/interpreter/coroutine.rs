@@ -1,7 +1,7 @@
 use super::execution::ExecutionContext;
 use super::heap::{CoroutineObjectKey, NativeFnObjectKey, StorageKey};
 use super::value_stack::ValueStack;
-use super::{MultiValue, ReturnMode, Vm, VmContext};
+use super::{MultiValue, Vm, VmContext};
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use std::rc::Rc;
 
@@ -19,11 +19,7 @@ pub(crate) struct YieldPermissions {
 pub(crate) enum Continuation {
     Entry(StorageKey),
     Callback(NativeFnObjectKey, ValueStack),
-    Execution {
-        execution: ExecutionContext,
-        return_mode: ReturnMode,
-        stack_start: usize,
-    },
+    Execution(ExecutionContext),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -62,7 +58,7 @@ impl Coroutine {
         }
     }
 
-    pub fn resume(
+    pub(crate) fn resume(
         co_key: CoroutineObjectKey,
         mut args: MultiValue,
         ctx: &mut VmContext,
@@ -108,18 +104,9 @@ impl Coroutine {
 
             let result = match continuation {
                 Continuation::Entry(key) => match key {
-                    StorageKey::Function(key) => ExecutionContext::new_function_call(key, args, vm)
-                        .and_then(|execution| {
-                            vm.execution_stack.push(execution);
-                            ExecutionContext::resume(vm)
-                        }),
+                    StorageKey::Function(key) => ExecutionContext::call_interpreted(key, args, vm),
                     StorageKey::NativeFunction(key) => {
-                        let Some(native_function) = vm.execution_data.heap.get_native_fn(key)
-                        else {
-                            return Err(RuntimeErrorData::InvalidInternalState.into());
-                        };
-
-                        native_function.shallow_clone().call(key, args, ctx)
+                        ExecutionContext::call_native_fn(key, args, vm)
                     }
                     _ => return Err(RuntimeErrorData::InvalidInternalState.into()),
                 },
@@ -133,17 +120,14 @@ impl Coroutine {
 
                     cache_pools.store_short_value_stack(state);
 
-                    callback
-                        .shallow_clone()
-                        .call(key, (Ok(args), state_multi), ctx)
+                    let callback = callback.shallow_clone();
+
+                    ExecutionContext::call_closure(args, vm, |call_ctx, ctx| {
+                        callback.call(key, (call_ctx, Ok(()), state_multi), ctx)
+                    })
                 }
-                Continuation::Execution {
-                    mut execution,
-                    return_mode,
-                    stack_start,
-                } => {
-                    let result =
-                        execution.handle_external_return(return_mode, stack_start, &mut args);
+                Continuation::Execution(mut execution) => {
+                    let result = execution.handle_external_return(&mut args);
                     vm.store_multi(args);
 
                     vm.execution_stack.push(execution);
@@ -292,10 +276,11 @@ impl Coroutine {
 
                     cache_pools.store_short_value_stack(state);
 
-                    match callback
-                        .shallow_clone()
-                        .call(key, (Err(err), state_multi), ctx)
-                    {
+                    let callback = callback.shallow_clone();
+
+                    match ExecutionContext::call_closure(vm.create_multi(), vm, |call_ctx, ctx| {
+                        callback.call(key, (call_ctx, Err(err), state_multi), ctx)
+                    }) {
                         Ok(values) => {
                             // converted to Ok ("pcall"-like function)
                             return Ok(values);
@@ -310,7 +295,7 @@ impl Coroutine {
                         }
                     }
                 }
-                Continuation::Execution { execution, .. } => {
+                Continuation::Execution(execution) => {
                     let vm = &mut *ctx.vm;
                     vm.execution_stack.push(execution);
                     err = ExecutionContext::continue_unwind(vm, err);

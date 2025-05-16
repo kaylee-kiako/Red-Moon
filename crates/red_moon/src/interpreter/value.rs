@@ -3,7 +3,8 @@ use super::heap::{BytesObjectKey, Heap, StorageKey};
 use super::value_stack::StackValue;
 use super::vm::VmContext;
 use super::{
-    ByteString, CoroutineRef, FromMulti, FunctionRef, IntoMulti, Number, StringRef, TableRef,
+    ByteString, CoroutineRef, ForEachValue, FromValues, FunctionRef, Number, StringRef, TableRef,
+    MultiValue,
 };
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use crate::languages::lua::parse_number;
@@ -164,24 +165,20 @@ impl Value {
         }
     }
 
-    pub fn call<A: IntoMulti, R: FromMulti>(
+    pub fn call<A: ForEachValue, R: FromValues>(
         &self,
         args: A,
         ctx: &mut VmContext,
     ) -> Result<R, RuntimeError> {
-        let args = args.into_multi(ctx)?;
+        let args = MultiValue::pack(args, ctx)?;
 
         // must test validity of every arg, since invalid keys in the ctx will cause a panic
         for value in &args.values {
             value.test_validity(&ctx.vm.execution_data.heap)?;
         }
 
-        let execution = ExecutionContext::new_value_call(self.to_stack_value(), args, ctx.vm)?;
-
-        ctx.vm.execution_stack.push(execution);
-        let multi = ExecutionContext::resume(ctx.vm)?;
-
-        R::from_multi(multi, ctx)
+        let mut variadic = ExecutionContext::call_value(self.to_stack_value(), args, ctx.vm)?;
+        R::from_values(ctx, |_| variadic.pop_front())
     }
 
     #[inline]
@@ -290,7 +287,7 @@ impl Value {
         Ok(value)
     }
 
-    fn try_binary_metamethods<T: FromMulti>(
+    fn try_binary_metamethods<T: FromValues>(
         &self,
         other: &Value,
         method_name: BytesObjectKey,

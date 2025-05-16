@@ -5,20 +5,19 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // todo: close
 
     // create
-    let create = ctx.create_function(|args, ctx| {
-        let function = args.unpack_args(ctx)?;
+    let create = ctx.create_function(|call_ctx, ctx| {
+        let function = call_ctx.get_args(ctx)?;
         let co = ctx.create_coroutine(function)?;
-        MultiValue::pack(co, ctx)
+        call_ctx.return_values(co, ctx)
     });
     let rehydrating = create.rehydrate("coroutine.create", ctx)?;
 
     // isyieldable
-    let isyieldable = ctx.create_function(|args, ctx| {
-        let (co, mut args): (Option<CoroutineRef>, MultiValue) = args.unpack(ctx)?;
+    let isyieldable = ctx.create_function(|call_ctx, ctx| {
+        let co: Option<CoroutineRef> = call_ctx.get_args(ctx)?;
 
         if !ctx.is_yieldable() {
-            args.push_front(Value::Bool(false));
-            return Ok(args);
+            return call_ctx.return_values(false, ctx);
         }
 
         let top_coroutine = ctx.top_coroutine();
@@ -28,43 +27,32 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             top_coroutine.is_some()
         };
 
-        args.push_front(Value::Bool(yieldable));
-
-        Ok(args)
+        call_ctx.return_values(yieldable, ctx)
     });
     create.rehydrate("coroutine.isyieldable", ctx)?;
 
     // resume
-    let resume = ctx.create_function(|args, ctx| {
-        let (co, args): (CoroutineRef, MultiValue) = args.unpack_args(ctx)?;
+    let resume = ctx.create_function(|call_ctx, ctx| {
+        let (co, args): (CoroutineRef, MultiValue) = call_ctx.get_args(ctx)?;
 
         match co.resume(args, ctx) {
-            Ok(mut values) => {
-                values.push_front(Value::Bool(true));
-                Ok(values)
-            }
-            Err(err) => MultiValue::pack((false, err.to_string()), ctx),
+            Ok(values) => call_ctx.return_values((true, values), ctx),
+            Err(err) => call_ctx.return_values((false, err.to_string()), ctx),
         }
     });
     create.rehydrate("coroutine.resume", ctx)?;
 
     // running
-    let running = ctx.create_function(|mut args, ctx| {
-        args.clear();
-
+    let running = ctx.create_function(|call_ctx, ctx| {
         let co = ctx.top_coroutine();
 
-        args.push_front(Value::Bool(co.is_none()));
-
-        let co_value = if let Some(co) = co {
-            Value::Coroutine(co)
+        if let Some(co) = co {
+            call_ctx.return_values((co, false), ctx)?;
         } else {
-            Value::Nil
-        };
+            call_ctx.return_values((Value::Nil, true), ctx)?;
+        }
 
-        args.push_front(co_value);
-
-        Ok(args)
+        Ok(())
     });
     create.rehydrate("coroutine.running", ctx)?;
 
@@ -74,8 +62,8 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     let normal_string = ctx.intern_string(b"normal");
     let dead_string = ctx.intern_string(b"dead");
 
-    let status = ctx.create_function(move |args, ctx| {
-        let co: CoroutineRef = args.unpack_args(ctx)?;
+    let status = ctx.create_function(move |call_ctx, ctx| {
+        let co: CoroutineRef = call_ctx.get_args(ctx)?;
         let status = match co.status(ctx)? {
             CoroutineStatus::Suspended => suspended_string.clone(),
             CoroutineStatus::Running => {
@@ -87,27 +75,38 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             }
             CoroutineStatus::Dead => dead_string.clone(),
         };
-        MultiValue::pack(status, ctx)
+        call_ctx.return_values(status, ctx)
     });
     create.rehydrate("coroutine.status", ctx)?;
 
     // wrap
-    let wrap = ctx.create_function(|args, ctx| {
-        let function = args.unpack_args(ctx)?;
+    let wrap = ctx.create_function(|call_ctx, ctx| {
+        let function = call_ctx.get_args(ctx)?;
         let co = ctx.create_coroutine(function)?;
 
-        let f = ctx.create_function(move |args, ctx| co.resume(args, ctx));
+        let f = ctx.create_function(move |call_ctx, ctx| {
+            let args: MultiValue = call_ctx.get_args(ctx)?;
+            let values = co.resume(args, ctx)?;
+            call_ctx.return_values(values, ctx)
+        });
 
-        MultiValue::pack(f, ctx)
+        call_ctx.return_values(f, ctx)
     });
     create.rehydrate("coroutine.wrap", ctx)?;
 
     // yield
-    let r#yield = ctx.create_resumable_function(|(result, state), ctx| {
-        if state.is_empty() {
+    let r#yield = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
+        let first_call = state.is_empty();
+        ctx.store_multi(state);
+
+        if first_call {
             ctx.resume_call_with_state(true)?;
-            Err(RuntimeErrorData::Yield(result?).into())
+            result?;
+
+            let args = call_ctx.get_args(ctx)?;
+            Err(RuntimeErrorData::Yield(args).into())
         } else {
+            call_ctx.return_args(.., ctx);
             result
         }
     });

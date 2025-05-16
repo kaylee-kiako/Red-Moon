@@ -7,10 +7,9 @@ mod function_ref;
 mod heap;
 mod instruction;
 mod interpreted_function;
-mod lazy_arg;
 mod metatable_keys;
 mod module;
-mod multi;
+mod multivalue;
 mod native_function;
 mod number;
 mod string_ref;
@@ -19,6 +18,7 @@ mod table_ref;
 mod up_values;
 mod value;
 mod value_stack;
+mod value_traits;
 mod vm;
 
 #[cfg(feature = "instruction_metrics")]
@@ -30,13 +30,14 @@ pub use coroutine_ref::CoroutineRef;
 pub use function_ref::FunctionRef;
 pub use heap::GarbageCollectorConfig;
 pub use instruction::{ConstantIndex, Instruction, Register, ReturnMode};
-pub use lazy_arg::LazyArg;
 pub use module::{Chunk, Module, SourceMapping, UpValueSource};
-pub use multi::{FromArg, FromArgs, FromMulti, IntoMulti, MultiValue};
+pub use multivalue::MultiValue;
+pub use native_function::NativeCallContext;
 pub use number::Number;
 pub use string_ref::StringRef;
 pub use table_ref::TableRef;
 pub use value::{FromValue, IntoValue, TypeName, Value};
+pub use value_traits::{ForEachValue, FromValues};
 pub use vm::{Vm, VmContext, VmLimits};
 
 pub(crate) use coroutine::Continuation;

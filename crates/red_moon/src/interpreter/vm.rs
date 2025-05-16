@@ -5,11 +5,11 @@ use super::heap::{
     CoroutineObjectKey, GarbageCollector, GarbageCollectorConfig, Heap, NativeFnObjectKey,
 };
 use super::metatable_keys::MetatableKeys;
-use super::native_function::NativeFunction;
+use super::native_function::{NativeCallContext, NativeFunction};
 use super::value_stack::{StackValue, ValueStack};
 use super::{
-    Continuation, CoroutineRef, FromMulti, FunctionRef, IntoMulti, Module, MultiValue, StringRef,
-    TableRef,
+    Continuation, CoroutineRef, ForEachValue, FromValues, FunctionRef, Module, MultiValue,
+    StringRef, TableRef,
 };
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use crate::interpreter::interpreted_function::{Function, FunctionDefinition};
@@ -433,11 +433,11 @@ impl VmContext<'_> {
     #[inline]
     pub fn environment_up_value(&mut self) -> Option<TableRef> {
         let context = self.vm.execution_stack.last()?;
-        let call = context.call_stack.last()?;
-        let env_index = call.function.definition.env?;
+        let interpreter = context.interpreter_stack.last()?;
+        let env_index = interpreter.function.definition.env?;
 
         let heap = &mut self.vm.execution_data.heap;
-        let env_stack_value_key = call.function.up_values.get(env_index)?;
+        let env_stack_value_key = interpreter.function.up_values.get(env_index)?;
 
         let Some(StackValue::Table(env_table_key)) = heap.get_stack_value(*env_stack_value_key)
         else {
@@ -631,13 +631,19 @@ impl VmContext<'_> {
 
     pub fn create_function(
         &mut self,
-        callback: impl Fn(MultiValue, &mut VmContext<'_>) -> Result<MultiValue, RuntimeError>
+        callback: impl Fn(&mut NativeCallContext, &mut VmContext<'_>) -> Result<(), RuntimeError>
             + Clone
             + 'static,
     ) -> FunctionRef {
         let heap = &mut self.vm.execution_data.heap;
         let gc = &mut self.vm.execution_data.gc;
-        let key = heap.store_native_fn_with_key(gc, |_| callback.into());
+        let key = heap.store_native_fn_with_key(gc, move |_| {
+            let wrapper = move |mut call_ctx, ctx: &mut VmContext| {
+                callback(&mut call_ctx, ctx)?;
+                Ok(call_ctx)
+            };
+            wrapper.into()
+        });
 
         let heap_ref = heap.create_ref(key.into());
 
@@ -656,20 +662,12 @@ impl VmContext<'_> {
     }
 
     /// Creates a function that can be resumed if a yield occurs.
-    /// Allows coroutine yielding within the scope of calls to this function.
+    /// [VmContext::resume_call_with_state()] must be called within the function's scope to allow yielding for the rest of the call.
+    /// The function will be resumed immediately if a yield does not occur.
     ///
-    /// If the function was just called, the arguments will be passed through the first value in the tuple
-    /// the second value will be empty.
+    /// Arguments passed to the call context will be from the initial call and `coroutine.resume()`
     ///
-    /// If [VmContext::resume_call_with_state()] is called,
-    /// this function will be resumed using it's own return results after completing as long as it isn't yielding.
-    ///
-    /// If the function was resumed, the result of the last call made before the yield occured will be passed as the first value in the tuple,
-    /// the second value will be any data passed to [VmContext::resume_call_with_state()]
-    ///
-    /// If a yield was directly created by this function,
-    /// the first value in the tuple will be the arguments passed to [CoroutineRef::resume()]
-    /// and the second value will be any data passed to [VmContext::resume_call_with_state()]
+    /// The result received by this function is for handling errors raised by resumed sub calls.
     ///
     /// ```
     /// # use red_moon::interpreter::{FunctionRef, MultiValue, Vm};
@@ -683,20 +681,22 @@ impl VmContext<'_> {
     /// impl_basic(ctx)?;
     /// impl_coroutine(ctx)?;
     ///
-    /// let for_range = ctx.create_resumable_function(|(result, state), ctx| {
+    /// let for_range = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
+    ///     // forward error
+    ///     result?;
+    ///
     ///     let mut next_increment = 0;
     ///
     ///     let (mut i, end, f): (i64, i64, FunctionRef) = if state.is_empty() {
     ///         // just called, the result passed in are the args
-    ///         let args = result?;
-    ///         args.unpack_args(ctx)?
+    ///         call_ctx.get_args(ctx)?
     ///     } else {
     ///         // restore from state
     ///         let (mut i, end, f) = state.unpack(ctx)?;
     ///
     ///         // result is the return value from the call that passed yield to us
     ///         // increment i the same way we would in the loop
-    ///         i += result?.unpack_args::<i64>(ctx)?;
+    ///         i += call_ctx.get_args::<i64>(ctx)?;
     ///
     ///         (i, end, f)
     ///     };
@@ -710,7 +710,7 @@ impl VmContext<'_> {
     ///         i += f.call::<_, i64>(i, ctx)?;
     ///     }
     ///
-    ///     MultiValue::pack((), ctx)
+    ///     Ok(())
     /// });
     ///
     /// let env = ctx.default_environment();
@@ -740,9 +740,9 @@ impl VmContext<'_> {
     pub fn create_resumable_function(
         &mut self,
         callback: impl Fn(
-                (Result<MultiValue, RuntimeError>, MultiValue),
+                (&mut NativeCallContext, Result<(), RuntimeError>, MultiValue),
                 &mut VmContext<'_>,
-            ) -> Result<MultiValue, RuntimeError>
+            ) -> Result<(), RuntimeError>
             + Clone
             + 'static,
     ) -> FunctionRef {
@@ -750,7 +750,7 @@ impl VmContext<'_> {
         let gc = &mut self.vm.execution_data.gc;
 
         let key = heap.store_native_fn_with_key(gc, move |key| {
-            let function_callback = move |args, ctx: &mut VmContext<'_>| {
+            let function_callback = move |call_ctx, ctx: &mut VmContext<'_>| {
                 let heap = &mut ctx.vm.execution_data.heap;
 
                 let Some(callback) = heap.resume_callbacks.get(&key) else {
@@ -763,22 +763,26 @@ impl VmContext<'_> {
                     values: Default::default(),
                 };
 
-                (callback.callback)((Ok(args), state), ctx)
+                (callback.callback)((call_ctx, Ok(()), state), ctx)
             };
 
             function_callback.into()
         });
 
         let callback = NativeFunction::from(
-            move |(mut result, mut state): (Result<MultiValue, RuntimeError>, MultiValue),
+            move |(mut call_ctx, mut result, mut state): (
+                NativeCallContext,
+                Result<(), RuntimeError>,
+                MultiValue,
+            ),
                   ctx: &mut VmContext<'_>| {
                 loop {
-                    result = callback((result, state), ctx);
+                    result = callback((&mut call_ctx, result, state), ctx);
 
                     let coroutine_data = &mut ctx.vm.execution_data.coroutine_data;
 
                     if !coroutine_data.continuation_state_set {
-                        return result;
+                        return result.map(|_| call_ctx);
                     }
 
                     if let Err(err) = &result {
@@ -797,6 +801,7 @@ impl VmContext<'_> {
                     state = MultiValue::from_value_stack(cache_pools, heap, &state_stack);
 
                     cache_pools.store_short_value_stack(state_stack);
+                    call_ctx.flush_return_values_to_args(ctx.vm);
                 }
 
                 let coroutine_data = &mut ctx.vm.execution_data.coroutine_data;
@@ -809,7 +814,7 @@ impl VmContext<'_> {
                     coroutine_data.continuation_state_set = false;
                 }
 
-                result
+                result.map(|_| call_ctx)
             },
         );
 
@@ -886,18 +891,43 @@ impl VmContext<'_> {
 
     /// Sets values to carry to the next resume of a function created by [VmContext::create_resumable_function()].
     /// Also allows the function to yield if [VmContext::is_yieldable()] is true.
-    pub fn resume_call_with_state<S: IntoMulti>(&mut self, state: S) -> Result<(), RuntimeError> {
-        let multi = state.into_multi(self)?;
-
+    pub fn resume_call_with_state<S: ForEachValue>(
+        &mut self,
+        state: S,
+    ) -> Result<(), RuntimeError> {
         let execution_data = &mut self.vm.execution_data;
         let coroutine_data = &mut execution_data.coroutine_data;
 
-        let mut stack = execution_data.cache_pools.create_short_value_stack();
-        multi.extend_stack(&mut stack);
-
         if coroutine_data.continuation_state_set {
-            *coroutine_data.continuation_states.last_mut().unwrap() = stack;
+            // take existing state stack and update values
+            let mut existing_stack =
+                std::mem::take(coroutine_data.continuation_states.last_mut().unwrap());
+
+            existing_stack.clear();
+            state.for_each_value(self, |result, _| {
+                existing_stack.push(result?.to_stack_value());
+                Ok(())
+            })?;
+
+            // put the state back
+            let execution_data = &mut self.vm.execution_data;
+            let coroutine_data = &mut execution_data.coroutine_data;
+
+            std::mem::swap(
+                coroutine_data.continuation_states.last_mut().unwrap(),
+                &mut existing_stack,
+            );
         } else {
+            // create a new stack to store state
+            let mut stack = execution_data.cache_pools.create_short_value_stack();
+
+            state.for_each_value(self, |result, _| {
+                stack.push(result?.to_stack_value());
+                Ok(())
+            })?;
+
+            let execution_data = &mut self.vm.execution_data;
+            let coroutine_data = &mut execution_data.coroutine_data;
             coroutine_data.continuation_states.push(stack);
             coroutine_data.continuation_state_set = true;
             coroutine_data.yield_permissions.allows_yield =
@@ -942,12 +972,12 @@ impl VmContext<'_> {
         self.vm.gc_config_mut()
     }
 
-    pub(crate) fn call_function_key<A: IntoMulti, R: FromMulti>(
+    pub(crate) fn call_function_key<A: ForEachValue, R: FromValues>(
         &mut self,
         function_value: StackValue,
         args: A,
     ) -> Result<R, RuntimeError> {
-        let args = args.into_multi(self)?;
+        let args = MultiValue::pack(args, self)?;
 
         // must test validity of every arg, since invalid keys in the vm will cause a panic
         let heap = &self.vm.execution_data.heap;
@@ -956,28 +986,16 @@ impl VmContext<'_> {
             value.test_validity(heap)?;
         }
 
-        let result = match function_value {
-            StackValue::NativeFunction(key) => {
-                let Some(func) = heap.get_native_fn(key) else {
-                    return Err(RuntimeErrorData::InvalidRef.into());
-                };
+        let mut multi = match function_value {
+            StackValue::NativeFunction(key) => ExecutionContext::call_native_fn(key, args, self.vm),
+            StackValue::Function(key) => ExecutionContext::call_interpreted(key, args, self.vm),
+            _ => ExecutionContext::call_value(function_value, args, self.vm),
+        }?;
 
-                func.shallow_clone().call(key, args, self)
-            }
-            StackValue::Function(key) => ExecutionContext::new_function_call(key, args, self.vm)
-                .and_then(|execution| {
-                    self.vm.execution_stack.push(execution);
-                    ExecutionContext::resume(self.vm)
-                }),
-            _ => ExecutionContext::new_value_call(function_value, args, self.vm).and_then(
-                |execution| {
-                    self.vm.execution_stack.push(execution);
-                    ExecutionContext::resume(self.vm)
-                },
-            ),
-        };
+        let r = R::from_values(self, |_| multi.pop_front());
 
-        let multi = result?;
-        R::from_multi(multi, self)
+        self.vm.store_multi(multi);
+
+        r
     }
 }

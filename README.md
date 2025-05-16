@@ -77,10 +77,11 @@ let mut vm = Vm::default();
 let ctx = &mut vm.context();
 
 // these can be captured, but not all are bug free:
-let f = ctx.create_function(move |_, ctx| {
+let f = ctx.create_function(move |call_ctx, ctx| {
   let count = counter.get();
   counter.set(count + 1);
-  MultiValue::pack(rc_counter.get() + *data + count, ctx)
+
+  call_ctx.return_values(rc_counter.get() + *data + count, ctx)
 });
 ```
 
@@ -99,7 +100,7 @@ use red_moon::interpreter::{Vm, VmContext, FunctionRef, MultiValue, Value};
 use red_moon::errors::RuntimeError;
 
 fn implement_foo(ctx: &mut VmContext) -> Result<bool, RuntimeError> {
-  let f = ctx.create_function(|_, ctx| MultiValue::pack("hello", ctx));
+  let f = ctx.create_function(|call_ctx, ctx| call_ctx.return_values("hello", ctx));
 
   // rehydrate our function using a tag
   // on the first run this will just tag our function

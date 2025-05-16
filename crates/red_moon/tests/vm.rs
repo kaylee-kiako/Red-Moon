@@ -1,15 +1,15 @@
-use red_moon::interpreter::{Chunk, Instruction, Module, MultiValue, ReturnMode, Value, Vm};
+use red_moon::interpreter::{Chunk, Instruction, Module, ReturnMode, Value, Vm};
 
 #[test]
 fn instructions_print() {
     let mut vm = Vm::default();
     let ctx = &mut vm.context();
 
-    let print_ref = ctx.create_function(|args, ctx| {
-        let len = args.len();
+    let print_ref = ctx.create_function(|call_ctx, ctx| {
+        let len = call_ctx.arg_count();
 
-        for (i, arg) in args.to_vec().into_iter().enumerate() {
-            match arg {
+        for i in 0..len {
+            match call_ctx.get_arg(i, ctx)? {
                 Value::Nil => print!("nil"),
                 Value::Bool(b) => print!("{b}"),
                 Value::Integer(n) => print!("{n}"),
@@ -27,7 +27,7 @@ fn instructions_print() {
             }
         }
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
 
     let env = ctx.default_environment();

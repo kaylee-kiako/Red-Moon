@@ -737,11 +737,9 @@ impl<'lua> MultiValue<'lua> {
         mut self,
         lua: &'lua Lua,
     ) -> Result<red_moon::interpreter::MultiValue> {
-        use red_moon::interpreter::IntoMulti;
-
         let vm = unsafe { lua.vm_mut() };
         let ctx = &mut vm.context();
-        let mut red_moon_multi = ().into_multi(ctx)?;
+        let mut red_moon_multi = ctx.create_multi();
 
         for mlua_value in self.vec.drain(..) {
             let red_moon_value = mlua_value.into_red_moon();

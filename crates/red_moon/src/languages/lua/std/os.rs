@@ -1,20 +1,15 @@
 use crate::errors::RuntimeError;
-use crate::interpreter::{IntoValue, VmContext};
-
+use crate::interpreter::VmContext;
 use cpu_time::ProcessTime;
 
 pub fn impl_os(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // clock
-    let clock = ctx.create_function(|mut args, ctx| {
-        args.clear();
-
+    let clock = ctx.create_function(|call_ctx, ctx| {
         let duration = ProcessTime::try_now()
             .map(|t| t.as_duration())
             .unwrap_or_default();
 
-        args.push_front(duration.as_secs_f64().into_value(ctx)?);
-
-        Ok(args)
+        call_ctx.return_values(duration.as_secs_f64(), ctx)
     });
     let rehydrating = clock.rehydrate("os.clock", ctx)?;
 

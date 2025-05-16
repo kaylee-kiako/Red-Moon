@@ -1,5 +1,5 @@
 use super::heap::{Heap, HeapRef, Storage, StorageKey};
-use super::{FromMulti, IntoMulti, VmContext};
+use super::{ForEachValue, FromValues, VmContext};
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use slotmap::Key;
 
@@ -95,7 +95,7 @@ impl FunctionRef {
         Ok(false)
     }
 
-    pub fn call<A: IntoMulti, R: FromMulti>(
+    pub fn call<A: ForEachValue, R: FromValues>(
         &self,
         args: A,
         ctx: &mut VmContext,

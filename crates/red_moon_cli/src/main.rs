@@ -258,20 +258,20 @@ fn impl_rewind(ctx: &mut VmContext) -> Result<QueuedRewind, RuntimeError> {
     let snap = ctx.create_function(move |_, ctx| {
         let mut snapshots = snapshots_capture.borrow_mut();
         snapshots.push(ctx.clone_vm());
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     env.set("snap", snap, ctx)?;
 
     let queued_rewind_capture = queued_rewind.clone();
-    let rewind = ctx.create_function(move |args, ctx| {
-        let x: Option<i64> = args.unpack(ctx)?;
+    let rewind = ctx.create_function(move |call_ctx, ctx| {
+        let x: Option<i64> = call_ctx.get_args(ctx)?;
         let x = x.unwrap_or(-1);
 
         let mut snapshots = snapshots.borrow_mut();
 
         let x = match x.cmp(&0) {
             std::cmp::Ordering::Less => return Err(RuntimeErrorData::OutOfBounds.into()),
-            std::cmp::Ordering::Equal => return MultiValue::pack((), ctx),
+            std::cmp::Ordering::Equal => return Ok(()),
             std::cmp::Ordering::Greater => {
                 let x = x as usize;
 
@@ -288,7 +288,7 @@ fn impl_rewind(ctx: &mut VmContext) -> Result<QueuedRewind, RuntimeError> {
         snapshots.truncate(x + 1);
         queued_rewind_capture.set(snapshots.pop());
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     env.set("queue_rewind", rewind, ctx)?;
 

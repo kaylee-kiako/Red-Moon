@@ -381,11 +381,12 @@ impl Lua {
 
         let vm = unsafe { self.vm_mut() };
         let ctx = &mut vm.context();
-        let function_ref = ctx.create_function(move |args, _| {
+        let function_ref = ctx.create_function(move |call_ctx, ctx| {
             // wildly unsafe, see Lua::self_ptr's definition
             let lua = unsafe { &*self_ptr.get() };
 
             // translate args
+            let args = call_ctx.get_args(ctx)?;
             let mlua_multi = MultiValue::from_red_moon(lua, args);
 
             // call function
@@ -394,7 +395,8 @@ impl Lua {
             // translate results
             let mlua_multi = results.into_lua_multi(lua)?;
 
-            Ok(mlua_multi.into_red_moon(lua)?)
+            call_ctx.return_values(mlua_multi.into_red_moon(lua)?, ctx)?;
+            Ok(())
         });
 
         Ok(Function {

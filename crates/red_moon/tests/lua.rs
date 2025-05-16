@@ -36,13 +36,13 @@ fn valid() {
     // override print
     let out_capture = out.clone();
 
-    let print_ref = ctx.create_function(move |args, vm| {
-        let len = args.len();
+    let print_ref = ctx.create_function(move |call_ctx, ctx| {
+        let len = call_ctx.arg_count();
 
         let mut out = out_capture.borrow_mut();
 
-        for (i, arg) in args.to_vec().into_iter().enumerate() {
-            match arg {
+        for i in 0..len {
+            match call_ctx.get_arg(i, ctx)? {
                 Value::Nil => write!(&mut *out, "nil").unwrap(),
                 Value::Bool(b) => write!(&mut *out, "{b}").unwrap(),
                 Value::Integer(n) => write!(&mut *out, "{n}").unwrap(),
@@ -53,7 +53,7 @@ fn valid() {
                 Value::String(string_ref) => write!(
                     &mut *out,
                     "{}",
-                    string_ref.fetch(vm).unwrap().to_string_lossy()
+                    string_ref.fetch(ctx).unwrap().to_string_lossy()
                 )
                 .unwrap(),
             }
@@ -65,7 +65,7 @@ fn valid() {
 
         writeln!(&mut *out).unwrap();
 
-        MultiValue::pack((), vm)
+        Ok(())
     });
 
     env.raw_set("print", print_ref, ctx).unwrap();

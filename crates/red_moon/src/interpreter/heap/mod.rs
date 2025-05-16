@@ -8,7 +8,7 @@ pub(crate) use heap_ref::*;
 use super::byte_string::ByteString;
 use super::coroutine::Coroutine;
 use super::interpreted_function::Function;
-use super::native_function::NativeFunction;
+use super::native_function::{NativeCallContext, NativeFunction};
 use super::table::Table;
 use super::value_stack::StackValue;
 use super::MultiValue;
@@ -29,7 +29,8 @@ pub(crate) struct Storage {
     pub(super) byte_strings: slotmap::SlotMap<BytesObjectKey, ByteString>,
     pub(super) tables: slotmap::SlotMap<TableObjectKey, Table>,
     pub(super) metatables: slotmap::SecondaryMap<TableObjectKey, TableObjectKey>,
-    pub(super) native_functions: slotmap::SlotMap<NativeFnObjectKey, NativeFunction<MultiValue>>,
+    pub(super) native_functions:
+        slotmap::SlotMap<NativeFnObjectKey, NativeFunction<NativeCallContext>>,
     pub(super) functions: slotmap::SlotMap<FnObjectKey, Function>,
     pub(super) coroutines: slotmap::SlotMap<CoroutineObjectKey, Coroutine>,
 }
@@ -173,7 +174,7 @@ pub(crate) struct Heap {
     pub(crate) tags: IndexMap<StackValue, NativeFnObjectKey, BuildFastHasher>,
     pub(crate) resume_callbacks: FastHashMap<
         NativeFnObjectKey,
-        NativeFunction<(Result<MultiValue, RuntimeError>, MultiValue)>,
+        NativeFunction<(NativeCallContext, Result<(), RuntimeError>, MultiValue)>,
     >,
     pub(crate) recycled_tables: Rc<VecCell<Table>>,
     // feels a bit weird in here and not on VM, but easier to work with here
@@ -284,7 +285,7 @@ impl Heap {
     pub(crate) fn store_native_fn_with_key(
         &mut self,
         gc: &mut GarbageCollector,
-        callback: impl FnOnce(NativeFnObjectKey) -> NativeFunction<MultiValue>,
+        callback: impl FnOnce(NativeFnObjectKey) -> NativeFunction<NativeCallContext>,
     ) -> NativeFnObjectKey {
         self.storage.native_functions.insert_with_key(|key| {
             let value = callback(key);
@@ -372,7 +373,7 @@ impl Heap {
     pub(crate) fn get_native_fn(
         &self,
         key: NativeFnObjectKey,
-    ) -> Option<&NativeFunction<MultiValue>> {
+    ) -> Option<&NativeFunction<NativeCallContext>> {
         self.storage.native_functions.get(key)
     }
 
@@ -410,7 +411,7 @@ impl Heap {
         &mut self,
         gc: &mut GarbageCollector,
         key: NativeFnObjectKey,
-        value: NativeFunction<MultiValue>,
+        value: NativeFunction<NativeCallContext>,
     ) {
         gc.acknowledge_write(key.into());
         self.storage.native_functions[key] = value;

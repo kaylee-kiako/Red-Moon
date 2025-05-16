@@ -1,5 +1,5 @@
 use red_moon::errors::RuntimeError;
-use red_moon::interpreter::{FunctionRef, MultiValue, Vm};
+use red_moon::interpreter::{FunctionRef, Vm};
 use red_moon::languages::lua::std::{impl_basic, impl_coroutine};
 use red_moon::languages::lua::LuaCompiler;
 
@@ -11,11 +11,11 @@ fn resumable() -> Result<(), RuntimeError> {
     impl_basic(ctx)?;
     impl_coroutine(ctx)?;
 
-    let for_range = ctx.create_resumable_function(|(result, state), ctx| {
+    let for_range = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
         let (i, end, f): (i64, i64, FunctionRef) = if state.is_empty() {
             // just called, the result passed in are the args
-            let args = result?;
-            args.unpack_args(ctx)?
+            result?;
+            call_ctx.get_args(ctx)?
         } else {
             // restore from state
             state.unpack(ctx)?
@@ -29,7 +29,7 @@ fn resumable() -> Result<(), RuntimeError> {
             f.call::<_, ()>(i, ctx)?;
         }
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
 
     let env = ctx.default_environment();

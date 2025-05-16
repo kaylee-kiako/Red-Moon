@@ -1,11 +1,11 @@
 use crate::errors::{RuntimeError, RuntimeErrorData};
-use crate::interpreter::{MultiValue, Number, StringRef, TableRef, Value, VmContext};
+use crate::interpreter::{Number, StringRef, TableRef, Value, VmContext};
 use crate::languages::lua::parse_number;
 
 pub fn impl_string(ctx: &mut VmContext) -> Result<(), RuntimeError> {
-    let len = ctx.create_function(|args, ctx| {
-        let string: StringRef = args.unpack(ctx)?;
-        MultiValue::pack(string.fetch(ctx)?.len(), ctx)
+    let len = ctx.create_function(|call_ctx, ctx| {
+        let string: StringRef = call_ctx.get_args(ctx)?;
+        call_ctx.return_values(string.fetch(ctx)?.len(), ctx)
     });
     let rehydrating = len.rehydrate("str.len", ctx)?;
 
@@ -31,8 +31,8 @@ pub fn impl_string(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 macro_rules! impl_binary_number_op {
     ($ctx:ident, $metatable:ident, $metamethod:ident, $fn_name:ident, $op:tt) => {
         let $metamethod = $ctx.metatable_keys().$metamethod.clone();
-        let $fn_name = $ctx.create_function(|args, ctx| {
-            let (a, b): (Value, Value) = args.unpack(ctx)?;
+        let $fn_name = $ctx.create_function(|call_ctx, ctx| {
+            let (a, b): (Value, Value) = call_ctx.get_args(ctx)?;
 
             let a = coerce_number(&a, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(a.type_name()))?;
             let b = coerce_number(&b, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(b.type_name()))?;
@@ -44,7 +44,7 @@ macro_rules! impl_binary_number_op {
                 (Number::Float(a), Number::Integer(b)) => Value::Float(a $op b as f64),
             };
 
-            MultiValue::pack(value, ctx)
+            call_ctx.return_values(value, ctx)
         });
     };
 }
@@ -58,8 +58,8 @@ fn impl_string_metamethods(metatable: TableRef, ctx: &mut VmContext) -> Result<(
 
     // unary minus
     let unm = ctx.metatable_keys().unm.clone();
-    let unm_fn = ctx.create_function(|args, ctx| {
-        let a: Value = args.unpack(ctx)?;
+    let unm_fn = ctx.create_function(|call_ctx, ctx| {
+        let a: Value = call_ctx.get_args(ctx)?;
         let a = coerce_number(&a, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(a.type_name()))?;
 
         let a = match a {
@@ -67,24 +67,24 @@ fn impl_string_metamethods(metatable: TableRef, ctx: &mut VmContext) -> Result<(
             Number::Float(f) => Value::Float(-f),
         };
 
-        MultiValue::pack(a, ctx)
+        call_ctx.return_values(a, ctx)
     });
 
     // division
     let div = ctx.metatable_keys().div.clone();
-    let div_fn = ctx.create_function(|args, ctx| {
-        let (a, b): (Value, Value) = args.unpack(ctx)?;
+    let div_fn = ctx.create_function(|call_ctx, ctx| {
+        let (a, b): (Value, Value) = call_ctx.get_args(ctx)?;
 
         let a = coerce_float(&a, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(a.type_name()))?;
         let b = coerce_float(&b, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(b.type_name()))?;
 
-        MultiValue::pack(a / b, ctx)
+        call_ctx.return_values(a / b, ctx)
     });
 
     // integer division
     let idiv = ctx.metatable_keys().idiv.clone();
-    let idiv_fn = ctx.create_function(|args, ctx| {
-        let (a, b): (Value, Value) = args.unpack(ctx)?;
+    let idiv_fn = ctx.create_function(|call_ctx, ctx| {
+        let (a, b): (Value, Value) = call_ctx.get_args(ctx)?;
 
         let a = coerce_number(&a, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(a.type_name()))?;
         let b = coerce_number(&b, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(b.type_name()))?;
@@ -103,18 +103,18 @@ fn impl_string_metamethods(metatable: TableRef, ctx: &mut VmContext) -> Result<(
             (Number::Float(a), Number::Integer(b)) => Value::Float((a / b as f64).trunc()),
         };
 
-        MultiValue::pack(value, ctx)
+        call_ctx.return_values(value, ctx)
     });
 
     // power
     let pow = ctx.metatable_keys().pow.clone();
-    let pow_fn = ctx.create_function(|args, ctx| {
-        let (a, b): (Value, Value) = args.unpack(ctx)?;
+    let pow_fn = ctx.create_function(|call_ctx, ctx| {
+        let (a, b): (Value, Value) = call_ctx.get_args(ctx)?;
 
         let a = coerce_float(&a, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(a.type_name()))?;
         let b = coerce_float(&b, ctx).ok_or(RuntimeErrorData::InvalidArithmetic(b.type_name()))?;
 
-        MultiValue::pack(a.powf(b), ctx)
+        call_ctx.return_values(a.powf(b), ctx)
     });
 
     let rehydrating = add_fn.rehydrate("str.__add", ctx)?;

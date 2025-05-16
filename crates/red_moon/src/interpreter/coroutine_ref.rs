@@ -1,6 +1,6 @@
 use super::coroutine::Coroutine;
 use super::heap::{CoroutineObjectKey, HeapRef, Storage};
-use super::{CoroutineStatus, IntoMulti, MultiValue, VmContext};
+use super::{CoroutineStatus, ForEachValue, MultiValue, VmContext};
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use slotmap::Key;
 
@@ -22,12 +22,12 @@ impl CoroutineRef {
         Ok(coroutine.status)
     }
 
-    pub fn resume<A: IntoMulti>(
+    pub fn resume<A: ForEachValue>(
         &self,
         args: A,
         ctx: &mut VmContext,
     ) -> Result<MultiValue, RuntimeError> {
-        let args = args.into_multi(ctx)?;
+        let args = MultiValue::pack(args, ctx)?;
         Coroutine::resume(self.0.key(), args, ctx)
     }
 }

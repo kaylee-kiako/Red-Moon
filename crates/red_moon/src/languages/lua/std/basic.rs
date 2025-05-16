@@ -1,69 +1,59 @@
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use crate::interpreter::{
-    ByteString, FromValue, FunctionRef, LazyArg, MultiValue, TableRef, Value, VmContext,
+    ByteString, FromValue, FunctionRef, MultiValue, TableRef, Value, VmContext,
 };
 use crate::languages::lua::parse_number;
 
 pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // assert
-    let assert = ctx.create_function(|args, ctx| {
-        let (passed, message): (bool, LazyArg<Option<ByteString>>) = args.unpack_args(ctx)?;
+    let assert = ctx.create_function(|call_ctx, vm_ctx| {
+        let passed: bool = call_ctx.get_arg(0, vm_ctx)?;
 
         if !passed {
-            if let Some(s) = message.into_arg(ctx)? {
+            let message: Option<ByteString> = call_ctx.get_arg(1, vm_ctx)?;
+
+            if let Some(s) = message {
                 return Err(RuntimeError::new_byte_string(s));
             } else {
                 return Err(RuntimeError::new_static_string("assertion failed!"));
             }
         }
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     let rehydrating = assert.rehydrate("lua.assert", ctx)?;
 
     // collectgarbage
-    let collectgarbage = ctx.create_function(|args, ctx| {
-        let (opt, mut rest): (Option<ByteString>, MultiValue) = args.unpack_args(ctx)?;
+    let collectgarbage = ctx.create_function(|call_ctx, ctx| {
+        let opt: Option<ByteString> = call_ctx.get_arg(0, ctx)?;
 
-        let result = if let Some(opt) = opt {
+        if let Some(opt) = opt {
             match opt.as_bytes() {
                 b"count" => {
                     let kibi = ctx.gc_used_memory() as f64 / 1024.0;
-                    MultiValue::pack(kibi, ctx)
+                    call_ctx.return_values(kibi, ctx)?;
                 }
                 b"isrunning" => {
                     let running = ctx.gc_is_running();
-                    MultiValue::pack(running, ctx)
+                    call_ctx.return_values(running, ctx)?;
                 }
                 b"stop" => {
                     ctx.gc_stop();
-                    MultiValue::pack((), ctx)
                 }
                 b"restart" => {
                     ctx.gc_restart();
-                    MultiValue::pack((), ctx)
                 }
                 b"step" => {
-                    let (kibi, new_rest): (Option<f64>, MultiValue) =
-                        rest.unpack_modified_args(ctx, 2)?;
-                    rest = new_rest;
+                    let kibi: Option<f64> = call_ctx.get_arg(1, ctx)?;
 
                     ctx.gc_step(kibi.map(|kibi| (kibi * 1024.0) as _).unwrap_or_default());
-                    MultiValue::pack((), ctx)
                 }
                 b"collect" => {
                     ctx.gc_collect();
-                    MultiValue::pack((), ctx)
                 }
                 b"incremental" => {
-                    let (pause, step_mul, step_size, new_rest): (
-                        Option<usize>,
-                        Option<usize>,
-                        Option<u32>,
-                        MultiValue,
-                    ) = rest.unpack_modified_args(ctx, 2)?;
-
-                    rest = new_rest;
+                    let (pause, step_mul, step_size): (Option<usize>, Option<usize>, Option<u32>) =
+                        call_ctx.get_args_at(1, ctx)?;
 
                     let config = ctx.gc_config_mut();
 
@@ -84,29 +74,26 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
                             config.step_size = 2usize.pow(step_size);
                         }
                     }
-
-                    MultiValue::pack((), ctx)
                 }
                 _ => {
                     let message = format!("invalid option '{opt}'");
                     let inner_error = RuntimeError::new_string(message);
-                    Err(RuntimeError::new_bad_argument(1, inner_error))
+
+                    return Err(RuntimeError::new_bad_argument(1, inner_error));
                 }
             }
         } else {
             ctx.gc_collect();
-            MultiValue::pack((), ctx)
         };
 
-        ctx.store_multi(rest);
-        result
+        Ok(())
     });
     collectgarbage.rehydrate("lua.collectgarbage", ctx)?;
 
     // error
-    let error = ctx.create_function(|args, ctx| {
+    let error = ctx.create_function(|call_ctx, ctx| {
         // todo: level
-        let message: Value = args.unpack_args(ctx)?;
+        let message: Value = call_ctx.get_args(ctx)?;
 
         let err = match message {
             Value::Integer(i) => RuntimeError::new_string(i.to_string()),
@@ -120,47 +107,50 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     error.rehydrate("lua.error", ctx)?;
 
     // print
-    let print = ctx.create_function(|mut args, ctx| {
-        while let Some(arg) = args.pop_front() {
+    let print = ctx.create_function(|call_ctx, ctx| {
+        let arg_count = call_ctx.arg_count();
+
+        for i in 0..arg_count {
+            let arg: Value = call_ctx.get_arg(i, ctx)?;
             print!("{}", to_string(arg, ctx)?);
 
-            if !args.is_empty() {
+            if i < arg_count - 1 {
                 print!("\t");
             }
         }
 
         println!();
 
-        Ok(args)
+        Ok(())
     });
     print.rehydrate("lua.print", ctx)?;
 
     // tostring
-    let tostring = ctx.create_function(|args, ctx| {
-        let value: Value = args.unpack_args(ctx)?;
+    let tostring = ctx.create_function(|call_ctx, ctx| {
+        let value: Value = call_ctx.get_args(ctx)?;
         let string = to_string(value, ctx)?;
 
-        MultiValue::pack(string, ctx)
+        call_ctx.return_values(string, ctx)
     });
     tostring.rehydrate("lua.tostring", ctx)?;
 
     // type
-    let type_name = ctx.create_function(|args, ctx| {
-        let value: Value = args.unpack_args(ctx)?;
+    let type_name = ctx.create_function(|call_ctx, ctx| {
+        let value: Value = call_ctx.get_args(ctx)?;
         let type_name = value.type_name();
 
-        MultiValue::pack(type_name.as_str(), ctx)
+        call_ctx.return_values(type_name.as_str(), ctx)
     });
     type_name.rehydrate("lua.type", ctx)?;
 
     // getmetatable
-    let getmetatable = ctx.create_function(|args, ctx| {
-        let value: Value = args.unpack_args(ctx)?;
+    let getmetatable = ctx.create_function(|call_ctx, ctx| {
+        let value: Value = call_ctx.get_args(ctx)?;
 
         let metatable = match value {
             Value::String(_) => Some(ctx.string_metatable()),
             Value::Table(table) => table.metatable(ctx)?,
-            _ => return MultiValue::pack(Value::Nil, ctx),
+            _ => return Ok(()),
         };
 
         if let Some(metatable) = &metatable {
@@ -168,17 +158,17 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             let metatable_value = metatable.raw_get::<_, Option<Value>>(metatable_key, ctx)?;
 
             if let Some(metatable_value) = metatable_value {
-                return MultiValue::pack(metatable_value, ctx);
+                return call_ctx.return_values(metatable_value, ctx);
             }
         }
 
-        MultiValue::pack(metatable, ctx)
+        call_ctx.return_values(metatable, ctx)
     });
     getmetatable.rehydrate("lua.getmetatable", ctx)?;
 
     // setmetatable
-    let setmetatable = ctx.create_function(|args, ctx| {
-        let (table, metatable): (TableRef, Option<TableRef>) = args.unpack_args(ctx)?;
+    let setmetatable = ctx.create_function(|call_ctx, ctx| {
+        let (table, metatable): (TableRef, Option<TableRef>) = call_ctx.get_args(ctx)?;
 
         if let Some(metatable) = table.metatable(ctx)? {
             let metatable_key = ctx.metatable_keys().metatable.clone();
@@ -194,64 +184,64 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         }
         table.set_metatable(metatable.as_ref(), ctx)?;
 
-        MultiValue::pack(table, ctx)
+        call_ctx.return_values(table, ctx)
     });
     setmetatable.rehydrate("lua.setmetatable", ctx)?;
 
     // rawequal
-    let rawequal = ctx.create_function(|args, ctx| {
-        let (a, b): (Value, Value) = args.unpack_args(ctx)?;
+    let rawequal = ctx.create_function(|call_ctx, ctx| {
+        let (a, b): (Value, Value) = call_ctx.get_args(ctx)?;
 
-        MultiValue::pack(a == b, ctx)
+        call_ctx.return_values(a == b, ctx)
     });
     rawequal.rehydrate("lua.rawequal", ctx)?;
 
     // rawget
-    let rawget = ctx.create_function(|args, ctx| {
-        let (table, key): (TableRef, Value) = args.unpack_args(ctx)?;
+    let rawget = ctx.create_function(|call_ctx, ctx| {
+        let (table, key): (TableRef, Value) = call_ctx.get_args(ctx)?;
         let value: Value = table.raw_get(key, ctx)?;
 
-        MultiValue::pack(value, ctx)
+        call_ctx.return_values(value, ctx)
     });
     rawget.rehydrate("lua.rawget", ctx)?;
 
     // rawset
-    let rawset = ctx.create_function(|args, ctx| {
-        let (table, key, value): (TableRef, Value, Value) = args.unpack_args(ctx)?;
+    let rawset = ctx.create_function(|call_ctx, ctx| {
+        let (table, key, value): (TableRef, Value, Value) = call_ctx.get_args(ctx)?;
         table.raw_set(key, value, ctx)?;
 
-        MultiValue::pack((), ctx)
+        Ok(())
     });
     rawset.rehydrate("lua.rawset", ctx)?;
 
     // next
-    let next = ctx.create_function(|args, ctx| {
-        let (table, key): (TableRef, Value) = args.unpack_args(ctx)?;
+    let next = ctx.create_function(|call_ctx, ctx| {
+        let (table, key): (TableRef, Value) = call_ctx.get_args(ctx)?;
         let Some((next_key, value)): Option<(Value, Value)> = table.next(key, ctx)? else {
-            return MultiValue::pack((), ctx);
+            return Ok(());
         };
 
-        MultiValue::pack((next_key, value), ctx)
+        call_ctx.return_values((next_key, value), ctx)
     });
     next.rehydrate("lua.next", ctx)?;
 
     // ipairs
-    let ipairs_iterator = ctx.create_function(|args, ctx| {
-        let (table, mut index): (TableRef, i64) = args.unpack_args(ctx)?;
+    let ipairs_iterator = ctx.create_function(|call_ctx, ctx| {
+        let (table, mut index): (TableRef, i64) = call_ctx.get_args(ctx)?;
         index += 1;
 
         let value: Value = table.raw_get(index, ctx)?;
 
         if value.is_nil() {
             // lua returns a single nil, not zero values
-            MultiValue::pack(value, ctx)
+            call_ctx.return_values(value, ctx)
         } else {
-            MultiValue::pack((index, value), ctx)
+            call_ctx.return_values((index, value), ctx)
         }
     });
 
-    let ipairs = ctx.create_function(move |args, ctx| {
-        let table: TableRef = args.unpack_args(ctx)?;
+    let ipairs = ctx.create_function(move |call_ctx, ctx| {
+        let table: TableRef = call_ctx.get_args(ctx)?;
 
         let iterator = if let Some(metatable) = table.metatable(ctx)? {
             // try metatable
@@ -262,24 +252,24 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             ipairs_iterator.clone()
         };
 
-        MultiValue::pack((iterator, table, 0), ctx)
+        call_ctx.return_values((iterator, table, 0), ctx)
     });
     ipairs.rehydrate("lua.ipairs", ctx)?;
 
     // pairs
-    let pairs_iterator = ctx.create_function(|args, ctx| {
-        let (table, prev_key): (TableRef, Value) = args.unpack_args(ctx)?;
+    let pairs_iterator = ctx.create_function(|call_ctx, ctx| {
+        let (table, prev_key): (TableRef, Value) = call_ctx.get_args(ctx)?;
 
         let Some((key, value)): Option<(Value, Value)> = table.next(prev_key, ctx)? else {
             // lua returns a single nil, not zero values
-            return MultiValue::pack(Value::default(), ctx);
+            return call_ctx.return_values(Value::default(), ctx);
         };
 
-        MultiValue::pack((key, value), ctx)
+        call_ctx.return_values((key, value), ctx)
     });
 
-    let pairs = ctx.create_function(move |args, ctx| {
-        let table: TableRef = args.unpack_args(ctx)?;
+    let pairs = ctx.create_function(move |call_ctx, ctx| {
+        let table: TableRef = call_ctx.get_args(ctx)?;
 
         let iterator = if let Some(metatable) = table.metatable(ctx)? {
             // try metatable
@@ -290,17 +280,16 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             pairs_iterator.clone()
         };
 
-        MultiValue::pack((iterator, table, Value::default()), ctx)
+        call_ctx.return_values((iterator, table, Value::default()), ctx)
     });
     pairs.rehydrate("lua.pairs", ctx)?;
 
     // select
-    let select = ctx.create_function(|args, ctx| {
-        let (arg, mut args): (Value, MultiValue) = args.unpack_args(ctx)?;
+    let select = ctx.create_function(|call_ctx, ctx| {
+        let arg: Value = call_ctx.get_arg(0, ctx)?;
 
         if let Ok(s) = ByteString::from_value(arg.clone(), ctx) {
-            let len = args.len();
-            ctx.store_multi(args);
+            let len = call_ctx.arg_count() - 1;
 
             if s.as_bytes() != b"#" {
                 return Err(RuntimeError::new_bad_argument(
@@ -309,20 +298,18 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
                 ));
             }
 
-            return MultiValue::pack(len, ctx);
+            return call_ctx.return_values(len, ctx);
         }
 
         let mut index = match i64::from_value(arg, ctx) {
             Ok(index) => index,
             Err(err) => {
-                ctx.store_multi(args);
-
                 return Err(RuntimeError::new_bad_argument(1, err));
             }
         };
 
         if index < 0 {
-            index += args.len() as i64 + 1;
+            index += call_ctx.arg_count() as i64 + 1;
         }
 
         if index <= 0 {
@@ -332,32 +319,24 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             ));
         }
 
-        let index = index as usize - 1;
-
-        if let Some(value) = args.get(index) {
-            let value = value.clone();
-            args.clear();
-            args.push_front(value);
-        } else {
-            args.clear();
-        }
-
-        Ok(args)
+        let index = index as usize;
+        call_ctx.return_arg(index, ctx);
+        Ok(())
     });
     select.rehydrate("lua.select", ctx)?;
 
     // tonumber
-    let tonumber = ctx.create_function(|args, ctx| {
-        let (string, base): (Option<ByteString>, Option<i64>) = args.unpack_args(ctx)?;
+    let tonumber = ctx.create_function(|call_ctx, ctx| {
+        let (string, base): (Option<ByteString>, Option<i64>) = call_ctx.get_args(ctx)?;
 
         let Some(base) = base else {
             let Some(string) = string else {
                 // lua allows nil only if no base is supplied
-                return MultiValue::pack(Value::default(), ctx);
+                return call_ctx.return_values(Value::default(), ctx);
             };
 
             // normal parsing
-            return MultiValue::pack(parse_number(&string.to_string_lossy()), ctx);
+            return call_ctx.return_values(parse_number(&string.to_string_lossy()), ctx);
         };
 
         let Some(string) = string else {
@@ -408,13 +387,13 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
                         break;
                     }
 
-                    return MultiValue::pack(Value::default(), ctx);
+                    return call_ctx.return_values(Value::default(), ctx);
                 }
             };
 
             if digit >= base {
                 // invalid digit
-                return MultiValue::pack(Value::default(), ctx);
+                return call_ctx.return_values(Value::default(), ctx);
             }
 
             n *= base;
@@ -429,69 +408,77 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         // fail if there's anything in the whitespace
         for b in &bytes[total_digits..] {
             if !b.is_ascii_whitespace() {
-                return MultiValue::pack(Value::default(), ctx);
+                return call_ctx.return_values(Value::default(), ctx);
             }
         }
 
-        MultiValue::pack(n, ctx)
+        call_ctx.return_values(n, ctx)
     });
     tonumber.rehydrate("lua.tonumber", ctx)?;
 
-    let pcall = ctx.create_resumable_function(move |(result, state), ctx| {
+    let pcall = ctx.create_resumable_function(move |(call_ctx, result, state), ctx| {
         let first_call = state.is_empty();
         ctx.store_multi(state);
 
         if first_call {
-            let (function, args): (FunctionRef, MultiValue) = result?.unpack_args(ctx)?;
+            result?;
+
+            let (function, args): (FunctionRef, MultiValue) = call_ctx.get_args(ctx)?;
 
             ctx.resume_call_with_state(true)?;
 
-            function.call::<_, MultiValue>(args, ctx)
+            let values = function.call::<_, MultiValue>(args, ctx)?;
+            call_ctx.return_values(values, ctx)?;
         } else {
             // handle the result of the call
             match result {
-                Ok(mut values) => {
+                Ok(values) => {
                     // return the success flag and pass the return values
-                    values.push_front(Value::Bool(true));
-                    Ok(values)
+                    call_ctx.return_values((true, values), ctx)?;
                 }
                 Err(err) => {
                     // return the success flag and the error as a value
-                    MultiValue::pack((false, err.to_string()), ctx)
+                    call_ctx.return_values((false, err.to_string()), ctx)?;
                 }
             }
         }
+
+        Ok(())
     });
     pcall.rehydrate("lua.pcall", ctx)?;
 
-    let xpcall = ctx.create_resumable_function(|(result, state), ctx| {
+    let xpcall = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
         let handler: Option<FunctionRef> = state.unpack(ctx)?;
 
         if let Some(handler) = handler {
             // resumed
-            match result {
-                Ok(values) => Ok(values),
-                Err(err) => {
-                    let mut err_message = err.to_string();
+            if let Err(err) = result {
+                let mut err_message = err.to_string();
 
-                    if let Err(handler_err) = handler.call::<_, ()>(err_message, ctx) {
-                        err_message = handler_err.to_string();
-                        // pass our handler's error into itself, give up on future errors (lua does not specify max retries)
-                        let _ = handler.call::<_, ()>(err_message, ctx);
-                    }
-
-                    Err(err)
+                if let Err(handler_err) = handler.call::<_, ()>(err_message, ctx) {
+                    err_message = handler_err.to_string();
+                    // pass our handler's error into itself, give up on future errors (lua does not specify max retries)
+                    let _ = handler.call::<_, ()>(err_message, ctx);
                 }
+
+                return Err(err);
             }
+
+            call_ctx.return_args(.., ctx);
         } else {
+            result?;
+
             // first call
             let (function, handler, args): (FunctionRef, FunctionRef, MultiValue) =
-                result?.unpack_args(ctx)?;
+                call_ctx.get_args(ctx)?;
 
             ctx.resume_call_with_state(handler.clone())?;
 
-            function.call::<_, MultiValue>(args, ctx)
+            let values = function.call::<_, MultiValue>(args, ctx)?;
+            call_ctx.return_values(values, ctx)?;
         }
+
+        Ok(())
     });
     xpcall.rehydrate("lua.xpcall", ctx)?;
 
