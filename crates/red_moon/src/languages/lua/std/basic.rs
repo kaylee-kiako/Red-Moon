@@ -9,17 +9,17 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     let assert = ctx.create_function(|call_ctx, vm_ctx| {
         let passed: bool = call_ctx.get_arg(0, vm_ctx)?;
 
-        if !passed {
-            let message: Option<ByteString> = call_ctx.get_arg(1, vm_ctx)?;
-
-            if let Some(s) = message {
-                return Err(RuntimeError::new_byte_string(s));
-            } else {
-                return Err(RuntimeError::new_static_string("assertion failed!"));
-            }
+        if passed {
+            return Ok(());
         }
 
-        Ok(())
+        let message: Option<ByteString> = call_ctx.get_arg(1, vm_ctx)?;
+
+        if let Some(s) = message {
+            Err(RuntimeError::new_byte_string(s))
+        } else {
+            Err(RuntimeError::new_static_string("assertion failed!"))
+        }
     });
     let rehydrating = assert.rehydrate("lua.assert", ctx)?;
 
