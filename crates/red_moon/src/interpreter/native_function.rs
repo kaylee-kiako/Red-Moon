@@ -56,7 +56,7 @@ impl NativeCallContext {
                 let execution = ctx.vm.execution_stack.last_mut().unwrap();
                 let heap = &mut ctx.vm.execution_data.heap;
                 let value_stack = &execution.value_stack;
-                let stack_value = value_stack.get_deref(heap, stack_index);
+                let stack_value = value_stack.get(stack_index);
                 Some(Value::from_stack_value(heap, stack_value))
             } else {
                 None
