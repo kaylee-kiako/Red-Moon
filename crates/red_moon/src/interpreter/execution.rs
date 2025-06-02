@@ -616,6 +616,10 @@ impl CallContext {
                     let value = StackValue::Bool(b);
                     value_stack.set(self.register_base + dest as usize, value);
                 }
+                Instruction::SetInt(dest, value) => {
+                    let value = StackValue::Integer(value as _);
+                    value_stack.set(self.register_base + dest as usize, value);
+                }
                 Instruction::LoadInt(dest, index) => {
                     let definition = &self.function.definition;
                     let Some(number) = definition.numbers.get(index as usize) else {
@@ -644,15 +648,9 @@ impl CallContext {
                     let dest_index = self.register_base + dest as usize;
                     value_stack.resize(dest_index);
                 }
-                Instruction::PrepMulti(dest, index) => {
-                    let definition = &self.function.definition;
-                    let Some(number) = definition.numbers.get(index as usize) else {
-                        return Err(IllegalInstruction::MissingNumberConstant(index).into());
-                    };
-                    let value = StackValue::Integer(*number);
-
+                Instruction::PrepMulti(dest, value) => {
                     let dest_index = self.register_base + dest as usize;
-                    value_stack.set(dest_index, value);
+                    value_stack.set(dest_index, StackValue::Integer(value as _));
                     value_stack.resize(dest_index + 1);
                 }
                 Instruction::PrepSelf(dest, bytes_index) => {

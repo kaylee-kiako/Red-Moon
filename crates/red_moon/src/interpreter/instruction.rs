@@ -76,6 +76,11 @@ pub enum Instruction {
     /// (dest, value)
     SetBool(Register, bool),
 
+    /// Stores an integer in a register
+    ///
+    /// (dest, value)
+    SetInt(Register, i16),
+
     /// Loads an integer from the numbers list and stores it in a register
     ///
     /// (dest, index)
@@ -96,12 +101,10 @@ pub enum Instruction {
     /// (dest)
     ClearFrom(Register),
 
-    /// Loads an integer from the numbers list and stores it in a register
+    /// Stores an integer at the destination and clears values past it
     ///
-    /// Clears values past the destination
-    ///
-    /// (dest, index)
-    PrepMulti(Register, ConstantIndex),
+    /// (dest, value)
+    PrepMulti(Register, i16),
 
     /// Moves a table at the dest two registers to the right, copies a field from that table into the dest
     ///
@@ -312,6 +315,7 @@ impl Instruction {
             Instruction::Constant(_) => "Constant",
             Instruction::SetNil(_) => "SetNil",
             Instruction::SetBool(_, _) => "SetBool",
+            Instruction::SetInt(_, _) => "SetInt",
             Instruction::LoadInt(_, _) => "LoadInt",
             Instruction::LoadFloat(_, _) => "LoadFloat",
             Instruction::LoadBytes(_, _) => "LoadBytes",

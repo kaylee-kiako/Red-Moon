@@ -108,6 +108,23 @@ impl<'source> FunctionContext<'source> {
         self.top_scope = self.scopes.pop().unwrap();
     }
 
+    fn create_integer_instruction(
+        &mut self,
+        register: Register,
+        source: &'source str,
+        token: LuaToken<'source>,
+        number: i64,
+    ) -> Result<Instruction, LuaCompilationError> {
+        if let Ok(i) = i16::try_from(number) {
+            return Ok(Instruction::SetInt(register, i));
+        }
+
+        Ok(Instruction::LoadInt(
+            register,
+            self.register_number(source, token, number)? as _,
+        ))
+    }
+
     fn register_number(
         &mut self,
         source: &'source str,
@@ -564,7 +581,7 @@ where
                     self.token_iter.next();
 
                     let top_register = self.top_function.next_register;
-                    self.resolve_exp_list(token, top_register)?;
+                    self.resolve_exp_list(top_register)?;
 
                     let instructions = &mut self.top_function.instructions;
                     let mut optimized = false;
@@ -802,9 +819,9 @@ where
                             self.token_iter.next();
                         }
 
-                        let assign_token = self.expect(LuaTokenLabel::Assign)?;
+                        self.expect(LuaTokenLabel::Assign)?;
 
-                        self.resolve_exp_list(assign_token, next_register)?;
+                        self.resolve_exp_list(next_register)?;
 
                         for path in lhs_list {
                             // start with increment to skip the len
@@ -914,7 +931,7 @@ where
                                 self.token_iter.next();
 
                                 let top_register = self.top_function.next_register;
-                                self.resolve_exp_list(token, top_register)?;
+                                self.resolve_exp_list(top_register)?;
                             }
                         }
                     }
@@ -1343,7 +1360,7 @@ where
 
         match token.label {
             LuaTokenLabel::OpenParen => {
-                self.resolve_exp_list(token, top_register + 1)?;
+                self.resolve_exp_list(top_register + 1)?;
                 self.expect(LuaTokenLabel::CloseParen)?;
 
                 // map the call
@@ -1363,9 +1380,8 @@ where
                 // load a single string
                 let string_index = self.top_function.intern_string(self.source, token)?;
 
-                let count_constant = self.top_function.register_number(self.source, token, 1)?;
                 let instructions = &mut self.top_function.instructions;
-                instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+                instructions.push(Instruction::SetInt(top_register + 1, 1));
                 instructions.push(Instruction::LoadBytes(top_register + 2, string_index));
                 call_instruction_index = instructions.len();
                 instructions.push(Instruction::Call(top_register, return_mode));
@@ -1378,9 +1394,8 @@ where
                 self.top_function
                     .map_following_instructions(self.source, token.offset);
 
-                let count_constant = self.top_function.register_number(self.source, token, 1)?;
                 let instructions = &mut self.top_function.instructions;
-                instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+                instructions.push(Instruction::SetInt(top_register + 1, 1));
                 call_instruction_index = instructions.len();
                 instructions.push(Instruction::Call(top_register, return_mode));
             }
@@ -1395,7 +1410,7 @@ where
                     LuaTokenLabel::OpenParen => {
                         let instructions = &mut self.top_function.instructions;
                         let prep_index = instructions.len();
-                        // init prep multi, dummy value for count constant
+                        // init prep multi, we'll modify this later
                         instructions.push(Instruction::PrepMulti(top_register + 1, 0));
 
                         // resolve the remaining args
@@ -1405,14 +1420,9 @@ where
                         )? + 1;
 
                         // update prep multi with the true count constant
-                        let count_constant = self.top_function.register_number(
-                            self.source,
-                            next_token,
-                            total.into(),
-                        )?;
                         let instructions = &mut self.top_function.instructions;
                         instructions[prep_index] =
-                            Instruction::PrepMulti(top_register + 1, count_constant);
+                            Instruction::PrepMulti(top_register + 1, total as _);
 
                         self.expect(LuaTokenLabel::CloseParen)?;
                     }
@@ -1420,20 +1430,13 @@ where
                         let string_index =
                             self.top_function.intern_string(self.source, name_token)?;
 
-                        let count_constant =
-                            self.top_function
-                                .register_number(self.source, next_token, 2)?;
                         let instructions = &mut self.top_function.instructions;
-                        instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+                        instructions.push(Instruction::SetInt(top_register + 1, 2));
                         instructions.push(Instruction::LoadBytes(top_register + 3, string_index));
                     }
                     LuaTokenLabel::OpenCurly => {
-                        let count_constant =
-                            self.top_function
-                                .register_number(self.source, next_token, 2)?;
-
                         let instructions = &mut self.top_function.instructions;
-                        instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+                        instructions.push(Instruction::SetInt(top_register + 1, 2));
 
                         self.resolve_table(top_register + 3)?;
                     }
@@ -1480,20 +1483,13 @@ where
     }
 
     /// Adds the count followed by expression results to the stack
-    fn resolve_exp_list(
-        &mut self,
-        first_token: LuaToken<'source>,
-        top_register: Register,
-    ) -> Result<(), LuaCompilationError> {
+    fn resolve_exp_list(&mut self, top_register: Register) -> Result<(), LuaCompilationError> {
         let mut total = 0;
 
         // initialize the argument count, we'll update it later
-        let count_constant = self
-            .top_function
-            .register_number(self.source, first_token, 0)?;
         let instructions = &mut self.top_function.instructions;
         let count_instruction_index = instructions.len();
-        instructions.push(Instruction::PrepMulti(top_register, count_constant));
+        instructions.push(Instruction::PrepMulti(top_register, 0));
 
         let Some(next_token) = self.token_iter.peek().cloned().transpose()? else {
             return Ok(());
@@ -1538,12 +1534,8 @@ where
             total -= 1;
         }
 
-        let count_constant =
-            self.top_function
-                .register_number(self.source, next_token, total as _)?;
         let instructions = &mut self.top_function.instructions;
-        instructions[count_instruction_index] =
-            Instruction::PrepMulti(top_register, count_constant);
+        instructions[count_instruction_index] = Instruction::PrepMulti(top_register, total as _);
 
         self.variadic_to_single_static(top_register, first_expression_start..last_expression_start);
 
@@ -1778,10 +1770,12 @@ where
             }
             LuaTokenLabel::Numeral => {
                 let instruction = match parse_unsigned_number(token.content) {
-                    Some(Number::Integer(i)) => {
-                        let constant = self.top_function.register_number(self.source, token, i)?;
-                        Instruction::LoadInt(top_register, constant)
-                    }
+                    Some(Number::Integer(i)) => self.top_function.create_integer_instruction(
+                        top_register,
+                        self.source,
+                        token,
+                        i,
+                    )?,
                     Some(Number::Float(f)) => {
                         let i = f.to_bits() as i64;
                         let constant = self.top_function.register_number(self.source, token, i)?;
@@ -2149,7 +2143,7 @@ where
         let instructions = &mut self.top_function.instructions;
         let create_table_index = instructions.len();
         instructions.push(Instruction::CreateTable(table_register, 0));
-        instructions.push(Instruction::LoadInt(count_register, 0));
+        instructions.push(Instruction::SetInt(count_register, 0));
 
         let mut next_register = list_start;
         let mut initial_variadic_count = 1;
@@ -2381,11 +2375,8 @@ where
             self.copy_stack_value(top_register + 1, register);
         } else {
             // step by 1
-            let count_constant = self
-                .top_function
-                .register_number(self.source, name_token, 1)?;
             let instructions = &mut self.top_function.instructions;
-            instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+            instructions.push(Instruction::SetInt(top_register + 1, 1));
         }
 
         if let Some(token) = next_token {
@@ -2439,19 +2430,16 @@ where
         // resolve the initial expression
         // we expect it to return an iterator, invariant state, and control variable
         let top_register = self.top_function.next_register;
-        self.resolve_exp_list(next_token, top_register)?;
+        self.resolve_exp_list(top_register)?;
 
         self.top_function
             .map_following_instructions(self.source, next_token.offset);
 
-        let count_constant = self
-            .top_function
-            .register_number(self.source, next_token, 2)?;
         let instructions = &mut self.top_function.instructions;
         // copy the iterator function into the top register
         instructions.push(Instruction::Copy(top_register, top_register + 1));
         // arg count
-        instructions.push(Instruction::LoadInt(top_register + 1, count_constant));
+        instructions.push(Instruction::SetInt(top_register + 1, 2));
 
         // loop start, call the function and store the results over the control variable
         let start_index = instructions.len();
