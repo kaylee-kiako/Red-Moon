@@ -529,7 +529,8 @@ where
                     let (start_index, branch_index) = match next_token.label {
                         LuaTokenLabel::Assign => {
                             use_for_jump = true;
-                            self.resolve_numeric_for_params(name_token)?
+                            let for_index = self.resolve_numeric_for_params(name_token)?;
+                            (for_index, for_index)
                         }
                         LuaTokenLabel::Comma | LuaTokenLabel::In => {
                             self.resolve_generic_for_params(name_token, next_token)?
@@ -566,7 +567,13 @@ where
                     self.unresolved_breaks.clear();
 
                     // resolve branch jump
-                    instructions[branch_index] = Instruction::Jump(next_instruction.into());
+                    match &mut instructions[branch_index] {
+                        Instruction::NumericFor(_, forward_jump) => {
+                            *forward_jump = (next_instruction - start_index - 1) as _
+                        }
+                        Instruction::Jump(index) => *index = next_instruction.into(),
+                        _ => unreachable!(),
+                    }
                 }
                 LuaTokenLabel::Break => {
                     // consume token
@@ -2347,23 +2354,21 @@ where
     /// Start past LuaTokenLabel::Assign
     /// a scope should be created before this call for the name to be converted to a local
     ///
-    /// Returns the loop start instruction index and the jump to end index
+    /// Returns the loop start instruction index
     fn resolve_numeric_for_params(
         &mut self,
         name_token: LuaToken<'source>,
-    ) -> Result<(usize, usize), LuaCompilationError> {
-        let local = self.top_function.register_local(self.source, name_token)?;
+    ) -> Result<usize, LuaCompilationError> {
+        let top_register = self.top_function.next_register;
 
         // resolve initial value
-        let register = self.resolve_expression(local, ReturnMode::Static(1), 0)?;
-        self.copy_stack_value(local, register);
-
-        let top_register = self.top_function.next_register;
+        let register = self.resolve_expression(top_register, ReturnMode::Static(1), 0)?;
+        self.copy_stack_value(top_register, register);
 
         // resolve limit
         self.expect(LuaTokenLabel::Comma)?;
-        let register = self.resolve_expression(top_register, ReturnMode::Static(1), 0)?;
-        self.copy_stack_value(top_register, register);
+        let register = self.resolve_expression(top_register + 1, ReturnMode::Static(1), 0)?;
+        self.copy_stack_value(top_register + 1, register);
 
         // resolve step
         let next_token = self.token_iter.peek().cloned().transpose()?;
@@ -2371,12 +2376,12 @@ where
         if next_token.is_some_and(|token| token.label == LuaTokenLabel::Comma) {
             // consume token
             self.token_iter.next();
-            let register = self.resolve_expression(top_register + 1, ReturnMode::Static(1), 0)?;
-            self.copy_stack_value(top_register + 1, register);
+            let register = self.resolve_expression(top_register + 2, ReturnMode::Static(1), 0)?;
+            self.copy_stack_value(top_register + 2, register);
         } else {
             // step by 1
             let instructions = &mut self.top_function.instructions;
-            instructions.push(Instruction::SetInt(top_register + 1, 1));
+            instructions.push(Instruction::SetInt(top_register + 2, 1));
         }
 
         if let Some(token) = next_token {
@@ -2385,15 +2390,16 @@ where
         }
 
         let instructions = &mut self.top_function.instructions;
-        let start_index = instructions.len();
-        instructions.push(Instruction::NumericFor(top_register, local));
-        let jump_index = instructions.len();
-        instructions.push(Instruction::Jump(0.into()));
+        let for_index = instructions.len();
+        instructions.push(Instruction::NumericFor(top_register, 0));
 
-        // consume registers for the limit and step
-        self.top_function.next_register += 2;
+        // consume registers for the value, limit, and step
+        self.top_function.next_register += 3;
 
-        Ok((start_index, jump_index))
+        // register local
+        self.top_function.register_local(self.source, name_token)?;
+
+        Ok(for_index)
     }
 
     /// A scope should be created before this call for the name list to be converted to locals

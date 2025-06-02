@@ -1181,9 +1181,9 @@ impl CallContext {
                         self.next_instruction_index += 1;
                     }
                 }
-                Instruction::NumericFor(src, local) => {
+                Instruction::NumericFor(src, forward_jump) => {
                     for_loop_jump =
-                        self.numeric_for(heap, value_stack, for_loop_jump, src, local)?;
+                        self.numeric_for(heap, value_stack, for_loop_jump, src, forward_jump)?;
                 }
                 Instruction::JumpToForLoop(i) => {
                     self.next_instruction_index = i.into();
@@ -2169,23 +2169,20 @@ impl CallContext {
         value_stack: &mut ValueStack,
         mut for_loop_jump: bool,
         src: Register,
-        local: Register,
+        forward_jump: u16,
     ) -> Result<bool, RuntimeErrorData> {
-        let limit = coerce_stack_value_to_integer(
-            heap,
-            value_stack.get(self.register_base + src as usize),
-            |type_name| RuntimeErrorData::InvalidForLimit(type_name),
-        )?;
-        let step = coerce_stack_value_to_integer(
-            heap,
-            value_stack.get(self.register_base + src as usize + 1),
-            |type_name| RuntimeErrorData::InvalidForStep(type_name),
-        )?;
-        let mut value = coerce_stack_value_to_integer(
-            heap,
-            value_stack.get(self.register_base + local as usize),
-            |type_name| RuntimeErrorData::InvalidForInitialValue(type_name),
-        )?;
+        let slice_start = self.register_base + src as usize;
+        let values = value_stack.get_slice_mut(slice_start..slice_start + 4);
+
+        let mut value = coerce_stack_value_to_integer(heap, values[0], |type_name| {
+            RuntimeErrorData::InvalidForInitialValue(type_name)
+        })?;
+        let limit = coerce_stack_value_to_integer(heap, values[1], |type_name| {
+            RuntimeErrorData::InvalidForLimit(type_name)
+        })?;
+        let step = coerce_stack_value_to_integer(heap, values[2], |type_name| {
+            RuntimeErrorData::InvalidForStep(type_name)
+        })?;
 
         if for_loop_jump {
             value += step;
@@ -2197,12 +2194,11 @@ impl CallContext {
             false => value < limit,
         };
 
-        if !stop {
-            value_stack.set(
-                self.register_base + local as usize,
-                StackValue::Integer(value),
-            );
-            self.next_instruction_index += 1;
+        if stop {
+            self.next_instruction_index += forward_jump as usize;
+        } else {
+            values[0] = StackValue::Integer(value);
+            values[3] = StackValue::Integer(value);
         }
 
         Ok(for_loop_jump)

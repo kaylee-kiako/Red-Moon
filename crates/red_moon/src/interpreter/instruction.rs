@@ -287,12 +287,14 @@ pub enum Instruction {
     /// (src)
     TestNil(Register),
 
-    /// Expects two numbers at src, the limit and the step
+    /// Expects three numbers at src: a value to increment, a limit, and the step
+    ///
+    /// Increments the instruction counter by forward_jump when complete
     ///
     /// Jump using JumpToForLoop to increment the local
     ///
-    /// (src, local)
-    NumericFor(Register, Register),
+    /// (src, forward_jump)
+    NumericFor(Register, u16),
 
     JumpToForLoop(InstructionIndex),
 
