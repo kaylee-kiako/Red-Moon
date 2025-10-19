@@ -200,7 +200,6 @@ pub enum Error {
     },
 }
 
-#[cfg(not(tarpaulin_include))]
 impl fmt::Display for Error {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
