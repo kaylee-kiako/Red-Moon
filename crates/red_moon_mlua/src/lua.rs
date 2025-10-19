@@ -111,7 +111,7 @@ impl Lua {
         &self.array_metatable
     }
 
-    pub(crate) fn pop_multivalue_from_pool(&self) -> Option<Vec<Value>> {
+    pub(crate) fn pop_multivalue_from_pool(&self) -> Option<Vec<Value<'_>>> {
         let mut resources = self.resources.borrow_mut();
 
         resources.multivalue_pool.pop()
@@ -223,7 +223,7 @@ impl Lua {
         }
     }
 
-    pub fn environment(&self) -> Result<Table> {
+    pub fn environment(&self) -> Result<Table<'_>> {
         self.modified.set(true);
         self.self_ptr.set(self);
 
@@ -239,7 +239,7 @@ impl Lua {
     }
 
     #[inline]
-    pub fn create_string(&self, s: impl AsRef<[u8]>) -> Result<String> {
+    pub fn create_string(&self, s: impl AsRef<[u8]>) -> Result<String<'_>> {
         let vm = unsafe { self.vm_mut() };
         let ctx = &mut vm.context();
         let string_ref = ctx.intern_string(s.as_ref());
@@ -252,7 +252,7 @@ impl Lua {
     }
 
     /// Creates and returns a new empty table.
-    pub fn create_table(&self) -> Result<Table> {
+    pub fn create_table(&self) -> Result<Table<'_>> {
         let vm = unsafe { self.vm_mut() };
         let ctx = &mut vm.context();
         let table_ref = ctx.create_table();
@@ -267,7 +267,7 @@ impl Lua {
     /// `narr` is a hint for how many elements the table will have as a sequence;
     /// `nrec` is a hint for how many other elements the table will have.
     /// Lua may use these hints to preallocate memory for the new table.
-    pub fn create_table_with_capacity(&self, narr: usize, nrec: usize) -> Result<Table> {
+    pub fn create_table_with_capacity(&self, narr: usize, nrec: usize) -> Result<Table<'_>> {
         let vm = unsafe { self.vm_mut() };
         let ctx = &mut vm.context();
         let table_ref = ctx.create_table_with_capacity(narr, nrec);
@@ -404,7 +404,7 @@ impl Lua {
     }
 
     #[inline]
-    pub fn globals(&self) -> Table {
+    pub fn globals(&self) -> Table<'_> {
         let vm = unsafe { self.vm() };
         let table_ref = vm.default_environment();
 
@@ -810,7 +810,7 @@ impl Lua {
     /// Panics if the data object of type `T` is currently mutably borrowed. Multiple immutable reads
     /// can be taken out at the same time.
     #[track_caller]
-    pub fn app_data_ref<T: 'static>(&self) -> Option<AppDataRef<T>> {
+    pub fn app_data_ref<T: 'static>(&self) -> Option<AppDataRef<'_, T>> {
         let vm = unsafe { self.vm_mut() };
 
         vm.app_data::<RefCell<T>>().map(|cell| {
@@ -832,7 +832,7 @@ impl Lua {
     ///
     /// Panics if the data object of type `T` is currently borrowed.
     #[track_caller]
-    pub fn app_data_mut<T: 'static>(&self) -> Option<AppDataRefMut<T>> {
+    pub fn app_data_mut<T: 'static>(&self) -> Option<AppDataRefMut<'_, T>> {
         let vm = unsafe { self.vm_mut() };
 
         self.modified.set(true);

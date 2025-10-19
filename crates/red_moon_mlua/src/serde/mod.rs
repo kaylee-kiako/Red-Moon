@@ -32,7 +32,7 @@ pub trait LuaSerdeExt: Sealed {
     ///     Ok(())
     /// }
     /// ```
-    fn null(&self) -> Value;
+    fn null(&self) -> Value<'_>;
 
     /// A metatable attachable to a Lua table to systematically encode it as Array (instead of Map).
     /// As result, encoded Array will contain only sequence part of the table, with the same length
@@ -63,7 +63,7 @@ pub trait LuaSerdeExt: Sealed {
     ///     Ok(())
     /// }
     /// ```
-    fn array_metatable(&self) -> Table;
+    fn array_metatable(&self) -> Table<'_>;
 
     /// Converts `T` into a [`Value`] instance.
     ///
@@ -191,11 +191,11 @@ pub trait LuaSerdeExt: Sealed {
 }
 
 impl LuaSerdeExt for Lua {
-    fn null(&self) -> Value {
+    fn null(&self) -> Value<'_> {
         Value::NULL
     }
 
-    fn array_metatable(&self) -> Table {
+    fn array_metatable(&self) -> Table<'_> {
         Table {
             lua: self,
             table_ref: self.array_metatable_ref().clone(),

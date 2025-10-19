@@ -2205,7 +2205,7 @@ impl CallContext {
     }
 }
 
-fn stringify(heap: &Heap, value: StackValue) -> Option<Cow<[u8]>> {
+fn stringify(heap: &Heap, value: StackValue) -> Option<Cow<'_, [u8]>> {
     match value {
         StackValue::Bytes(key) => {
             if let Some(bytes) = heap.get_bytes(key) {

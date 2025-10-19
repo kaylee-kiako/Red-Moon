@@ -374,7 +374,7 @@ impl Vm {
     }
 
     #[inline]
-    pub fn context(&mut self) -> VmContext {
+    pub fn context(&mut self) -> VmContext<'_> {
         VmContext { vm: self }
     }
 }
