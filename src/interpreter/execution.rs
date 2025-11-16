@@ -2188,31 +2188,61 @@ impl Interpreter {
         let slice_start = self.register_base + src as usize;
         let values = value_stack.get_slice_mut(slice_start..slice_start + 4);
 
-        let mut value = coerce_stack_value_to_integer(heap, values[0], |type_name| {
-            RuntimeErrorData::InvalidForInitialValue(type_name)
-        })?;
-        let limit = coerce_stack_value_to_integer(heap, values[1], |type_name| {
-            RuntimeErrorData::InvalidForLimit(type_name)
-        })?;
-        let step = coerce_stack_value_to_integer(heap, values[2], |type_name| {
-            RuntimeErrorData::InvalidForStep(type_name)
-        })?;
+        let (value, limit, step) = (
+            values[0].get_deref(heap),
+            values[1].get_deref(heap),
+            values[2].get_deref(heap),
+        );
 
-        if for_loop_jump {
-            value += step;
-            for_loop_jump = false;
-        }
+        if let (
+            StackValue::Integer(mut value),
+            StackValue::Integer(limit),
+            StackValue::Integer(step),
+        ) = (value, limit, step)
+        {
+            if for_loop_jump {
+                value += step;
+                for_loop_jump = false;
+            }
 
-        let stop = match step.is_positive() {
-            true => value > limit,
-            false => value < limit,
-        };
+            let stop = match step.is_positive() {
+                true => value > limit,
+                false => value < limit,
+            };
 
-        if stop {
-            self.next_instruction_index += forward_jump as usize;
+            if stop {
+                self.next_instruction_index += forward_jump as usize;
+            } else {
+                values[0] = StackValue::Integer(value);
+                values[3] = StackValue::Integer(value);
+            }
         } else {
-            values[0] = StackValue::Integer(value);
-            values[3] = StackValue::Integer(value);
+            let mut value = cast_float(heap, value, |type_name| {
+                RuntimeErrorData::InvalidForInitialValue(type_name)
+            })?;
+            let limit = cast_float(heap, limit, |type_name| {
+                RuntimeErrorData::InvalidForLimit(type_name)
+            })?;
+            let step = cast_float(heap, step, |type_name| {
+                RuntimeErrorData::InvalidForStep(type_name)
+            })?;
+
+            if for_loop_jump {
+                value += step;
+                for_loop_jump = false;
+            }
+
+            let stop = match step.is_sign_positive() {
+                true => value > limit,
+                false => value < limit,
+            };
+
+            if stop {
+                self.next_instruction_index += forward_jump as usize;
+            } else {
+                values[0] = StackValue::Float(value);
+                values[3] = StackValue::Float(value);
+            }
         }
 
         Ok(for_loop_jump)
@@ -2273,33 +2303,6 @@ fn cast_float(
     match value {
         StackValue::Integer(int) => Ok(int as f64),
         StackValue::Float(float) => Ok(float),
-        _ => Err(generate_err(value.type_name(heap))),
-    }
-}
-
-fn coerce_stack_value_to_integer(
-    heap: &Heap,
-    value: StackValue,
-    generate_err: impl FnOnce(TypeName) -> RuntimeErrorData,
-) -> Result<i64, RuntimeErrorData> {
-    match value {
-        StackValue::Float(float) => {
-            coerce_integer(float).ok_or(RuntimeErrorData::NoIntegerRepresentation)
-        }
-        StackValue::Integer(int) => Ok(int),
-        StackValue::Pointer(key) => {
-            if let Some(value) = heap.get_stack_value(key) {
-                if matches!(value, StackValue::Pointer(_)) {
-                    crate::debug_unreachable!();
-                    #[cfg(not(debug_assertions))]
-                    return Err(RuntimeErrorData::InvalidInternalState);
-                }
-
-                coerce_stack_value_to_integer(heap, *value, generate_err)
-            } else {
-                Err(RuntimeErrorData::InvalidInternalState)
-            }
-        }
         _ => Err(generate_err(value.type_name(heap))),
     }
 }

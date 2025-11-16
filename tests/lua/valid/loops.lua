@@ -43,13 +43,13 @@ until false
 -- setup for later scope test
 i = 0
 
-print("\nnumeric for loop:")
+print("\ninteger for loop:")
 for i = 1, 5 do
   print(i)
 end
 
 
-print("\nnumeric for loop break:")
+print("\ninteger for loop break:")
 for i = 1, 5 do
   print(i)
 
@@ -58,17 +58,38 @@ for i = 1, 5 do
   end
 end
 
-print("\nnumeric for loop reverse:")
+print("\ninteger for loop reverse:")
 for i = 5, 1, -1 do
   print(i)
 end
 
-print("\nnumeric for loop step:")
+print("\ninteger for loop step:")
 for i = 1, 10, 2 do
   print(i)
 end
 
-print("\nnumeric for loop scope:")
+print("\ninteger for loop scope:")
+print(i)
+
+-- setup for later scope test
+i = 0
+
+print("\nfloat for loop:")
+for i = 1, 5.0 do
+  print(i)
+end
+
+print("\nfloat for loop reverse:")
+for i = 5.0, 1, -1 do
+  print(i)
+end
+
+print("\nfloat for loop step:")
+for i = 1, 5, 0.5 do
+  print(i)
+end
+
+print("\nfloat for loop scope:")
 print(i)
 
 print("\ngeneric for loop:")
