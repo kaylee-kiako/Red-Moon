@@ -158,18 +158,18 @@ The garbage collector is incremental only.
 
 ### Standard Library
 
-| Library     | Supported                                                             |
-| ----------- | --------------------------------------------------------------------- |
-| `basic`     | ⚠️ Missing `load`, `loadfile`, `warn` and level parameter for `error` |
-| `coroutine` | ⚠️ Missing `coroutine.close`                                          |
-| `debug`     | ⛔ Not planned                                                        |
-| `math`      | ⚠️ Missing `math.random` and `math.randomseed`                        |
-| `os`        | ⚠️ Only `os.clock`                                                    |
-| `package`   | ⛔ Not yet                                                            |
-| `string`    | ⚠️ Only `string.len` and metamethods                                  |
-| `table`     | ⚠️ Missing `table.move` and `table.sort`                              |
-| `utf8`      | ⛔ Not yet                                                            |
-| `io`        | ⛔ Not yet                                                            |
+| Library     | Supported                                                                         |
+| ----------- | --------------------------------------------------------------------------------- |
+| `basic`     | ⚠️ Missing `load`, `loadfile`, `warn` and level parameter for `error`             |
+| `coroutine` | ⚠️ Missing `coroutine.close`                                                      |
+| `debug`     | ⚠️ Only `debug.getregistry()`, `debug.getmetatable()`, and `debug.setmetatable()` |
+| `math`      | ⚠️ Missing `math.random` and `math.randomseed`                                    |
+| `os`        | ⚠️ Only `os.clock`                                                                |
+| `package`   | ⛔ Not yet                                                                        |
+| `string`    | ⚠️ Only `string.len` and metamethods                                              |
+| `table`     | ⚠️ Missing `table.move` and `table.sort`                                          |
+| `utf8`      | ⛔ Not yet                                                                        |
+| `io`        | ⛔ Not yet                                                                        |
 
 ### Metamethods
 

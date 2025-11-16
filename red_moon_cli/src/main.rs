@@ -44,6 +44,7 @@ fn main2() -> Result<(), ()> {
     lua_std::impl_coroutine(ctx).unwrap();
     lua_std::impl_math(ctx).unwrap();
     lua_std::impl_os(ctx).unwrap();
+    lua_std::impl_debug(ctx).unwrap();
     lua_std::impl_string(ctx).unwrap();
     lua_std::impl_table(ctx).unwrap();
 
