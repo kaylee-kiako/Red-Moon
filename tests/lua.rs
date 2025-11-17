@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use red_moon::errors::{LuaCompilationError, RuntimeErrorData, SyntaxError};
 use red_moon::interpreter::{MultiValue, Value, Vm};
-use red_moon::languages::lua::std::{impl_basic, impl_coroutine, impl_string};
+use red_moon::languages::lua::std::{impl_basic, impl_coroutine, impl_debug, impl_string};
 use red_moon::languages::lua::{LuaCompiler, LuaTokenLabel};
 use std::cell::RefCell;
 use std::io::Write;
@@ -12,6 +12,7 @@ fn valid() {
     let folder_path = env!("CARGO_MANIFEST_DIR").to_string() + "/tests/lua/valid/";
     let test_files = vec![
         "coroutines.lua",
+        "debug.lua",
         "expressions.lua",
         "functions.lua",
         "garbage_collection.lua",
@@ -30,6 +31,7 @@ fn valid() {
     impl_basic(ctx).unwrap();
     impl_string(ctx).unwrap();
     impl_coroutine(ctx).unwrap();
+    impl_debug(ctx).unwrap();
 
     let env = ctx.default_environment();
 

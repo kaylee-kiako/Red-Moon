@@ -35,7 +35,9 @@ pub fn impl_debug(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 
     if !rehydrating {
         let debug = ctx.create_table();
-        debug.raw_set("debug", getmetatable, ctx)?;
+        debug.raw_set("getregistry", getregistry, ctx)?;
+        debug.raw_set("getmetatable", getmetatable, ctx)?;
+        debug.raw_set("setmetatable", setmetatable, ctx)?;
 
         let env = ctx.default_environment();
         env.set("debug", debug, ctx)?;

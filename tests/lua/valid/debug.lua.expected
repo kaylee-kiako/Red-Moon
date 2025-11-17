@@ -1,0 +1,9 @@
+registry debug:
+stored and retrieved: 1
+
+metatable debug:
+debug.setmetatable(1) returns passed value
+debug.getmetatable(1) returns nil
+debug.setmetatable(test_table, metatable)
+debug.getmetatable(test_table) == metatable
+basic getmetatable() returns __metatable value
