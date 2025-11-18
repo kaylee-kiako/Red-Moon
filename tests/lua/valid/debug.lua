@@ -47,3 +47,12 @@ end
 
 debug.sethook(hook, "", 1)
 i = i + 1
+
+
+print("\nget hook:")
+debug.sethook(function() end, "l crc", 0)
+print(debug.gethook())
+debug.sethook(function() end, "", 1)
+print(debug.gethook())
+debug.sethook()
+print(debug.gethook())

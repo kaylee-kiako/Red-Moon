@@ -18,3 +18,8 @@ count	nil
 hooks paused in hook:
 1
 2
+
+get hook:
+function	crl	0
+function		1
+nil

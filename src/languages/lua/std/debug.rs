@@ -33,6 +33,38 @@ pub fn impl_debug(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     });
     setmetatable.rehydrate("debug.setmetatable", ctx)?;
 
+    // gethook
+    let gethook = ctx.create_function(|call_ctx, ctx| {
+        // resolve hook
+        let Some(fn_ref) = ctx.hook() else {
+            return call_ctx.return_values(Value::Nil, ctx);
+        };
+
+        // resolve mask
+        let mask = ctx.hook_mask();
+        let mut mask_bytes = Vec::with_capacity(3);
+
+        if mask.contains(HookMask::CALL) {
+            mask_bytes.push(b'c');
+        }
+
+        if mask.contains(HookMask::RETURN) {
+            mask_bytes.push(b'r');
+        }
+
+        if mask.contains(HookMask::LINE) {
+            mask_bytes.push(b'l');
+        }
+
+        let mask_string_ref = ctx.intern_string(&mask_bytes);
+
+        // resolve count
+        let count = ctx.hook_count();
+
+        call_ctx.return_values((fn_ref, mask_string_ref, count), ctx)
+    });
+    gethook.rehydrate("debug.gethook", ctx)?;
+
     // sethook
     let sethook = ctx.create_function(|call_ctx, ctx| {
         let Some(callback) = call_ctx.get_arg::<Option<FunctionRef>>(0, ctx)? else {
@@ -72,6 +104,7 @@ pub fn impl_debug(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         debug.raw_set("getregistry", getregistry, ctx)?;
         debug.raw_set("getmetatable", getmetatable, ctx)?;
         debug.raw_set("setmetatable", setmetatable, ctx)?;
+        debug.raw_set("gethook", gethook, ctx)?;
         debug.raw_set("sethook", sethook, ctx)?;
 
         let env = ctx.default_environment();
