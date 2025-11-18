@@ -15,7 +15,7 @@ use std::borrow::Cow;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-enum CallResult {
+pub(crate) enum CallResult {
     Call(usize, ReturnMode),
     Return(usize),
     StepGc,
@@ -312,6 +312,7 @@ impl ExecutionContext {
                             execution = vm.execution_stack.last_mut().unwrap();
 
                             let result = execution.handle_return(
+                                &mut vm.execution_data,
                                 return_context.return_mode,
                                 return_context.stack_start,
                                 return_context.register_base,
@@ -380,6 +381,7 @@ impl ExecutionContext {
                     let return_count_index = return_context.register_base + registry_index;
 
                     let result = execution.handle_return(
+                        exec_data,
                         return_context.return_mode,
                         return_context.stack_start,
                         return_count_index,
@@ -407,6 +409,7 @@ impl ExecutionContext {
                         &mut exec_data.heap,
                         &vm.execution_stack,
                         &exec_data.coroutine_data,
+                        &exec_data.debug_hook,
                     );
 
                     execution = vm.execution_stack.last_mut().unwrap();
@@ -424,6 +427,7 @@ impl ExecutionContext {
 
     fn handle_return(
         &mut self,
+        exec_data: &mut ExecutionAccessibleData,
         return_mode: ReturnMode,
         stack_start: usize,
         return_count_index: usize,
@@ -499,6 +503,11 @@ impl ExecutionContext {
                 // the return mode should've been resolved to something else earlier
                 self.value_stack.chip(0, return_count + 1);
             }
+            ReturnMode::Hook => {
+                // remove all values
+                value_stack.chip(stack_start, 0);
+                exec_data.debug_hook.executing = false;
+            }
         }
 
         Ok(())
@@ -506,6 +515,7 @@ impl ExecutionContext {
 
     pub(crate) fn handle_external_return(
         &mut self,
+        exec_data: &mut ExecutionAccessibleData,
         return_values: &mut MultiValue,
     ) -> Result<(), RuntimeErrorData> {
         let return_context = self.return_contexts.pop().unwrap();
@@ -514,6 +524,7 @@ impl ExecutionContext {
         return_values.push_stack_multi(&mut self.value_stack);
 
         self.handle_return(
+            exec_data,
             return_context.return_mode,
             return_context.stack_start,
             return_context.register_base,
@@ -617,6 +628,13 @@ impl Interpreter {
 
             let gc = &mut exec_data.gc;
             let heap = &mut exec_data.heap;
+
+            // check debug hook before incrementing instruction index
+            let debug_hook = &mut exec_data.debug_hook;
+            if debug_hook.count_instruction() {
+                return Ok(debug_hook.call_count_hook(gc, heap, value_stack, self.register_base));
+            }
+
             self.next_instruction_index += 1;
 
             match instruction {

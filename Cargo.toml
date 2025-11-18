@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 thin-vec = { version = "0.2", features = ["serde"] }
 erasable = "1"
 slice-dst = "1"
+bitflags = "2"
 
 [dev-dependencies]
 pretty_assertions = "1"

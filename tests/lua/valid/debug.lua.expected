@@ -7,3 +7,14 @@ debug.getmetatable(1) returns nil
 debug.setmetatable(test_table, metatable)
 debug.getmetatable(test_table) == metatable
 basic getmetatable() returns __metatable value
+
+instruction count hook:
+count	nil
+count	nil
+count	nil
+count	nil
+count	nil
+
+hooks paused in hook:
+1
+2

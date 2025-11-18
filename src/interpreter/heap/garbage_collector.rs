@@ -1,6 +1,7 @@
 use super::{FastStorageKey, Heap, NativeFnObjectKey, StorageKey, TableObjectKey};
 use crate::interpreter::cache_pools::CachePools;
 use crate::interpreter::cache_pools::RECYCLE_LIMIT;
+use crate::interpreter::debug_hooks::DebugHook;
 use crate::interpreter::execution::ExecutionContext;
 use crate::interpreter::metatable_keys::MetatableKeys;
 use crate::interpreter::up_values::UpValues;
@@ -166,6 +167,7 @@ impl GarbageCollector {
         heap: &mut Heap,
         execution_stack: &[ExecutionContext],
         coroutine_data: &CoroutineData,
+        debug_hook: &DebugHook,
     ) {
         let mark = match self.phase {
             Phase::Idle => {
@@ -182,7 +184,7 @@ impl GarbageCollector {
         let limit = self.used_memory * self.config.step_multiplier / 1024;
 
         if mark {
-            self.mark_roots(heap, execution_stack, coroutine_data);
+            self.mark_roots(heap, execution_stack, coroutine_data, debug_hook);
             self.traverse_gray(metatable_keys, cache_pools, heap, Some(limit));
 
             if self.phase_queue.is_empty() {
@@ -200,8 +202,9 @@ impl GarbageCollector {
         heap: &mut Heap,
         execution_stack: &[ExecutionContext],
         coroutine_data: &CoroutineData,
+        debug_hook: &DebugHook,
     ) {
-        self.mark_roots(heap, execution_stack, coroutine_data);
+        self.mark_roots(heap, execution_stack, coroutine_data, debug_hook);
 
         while !self.phase_queue.is_empty() {
             self.traverse_gray(metatable_keys, cache_pools, heap, None);
@@ -217,6 +220,7 @@ impl GarbageCollector {
         heap: &mut Heap,
         execution_stack: &[ExecutionContext],
         coroutine_data: &CoroutineData,
+        debug_hook: &DebugHook,
     ) {
         // identify ref roots and mark them
         heap.ref_roots.retain(|&key, counter| {
@@ -255,6 +259,11 @@ impl GarbageCollector {
                 }
                 Continuation::Execution(execution) => self.mark_execution_context(execution),
             }
+        }
+
+        // mark debug hook
+        if let Some(key) = debug_hook.callback {
+            self.mark_storage_key(key);
         }
     }
 

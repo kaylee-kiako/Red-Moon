@@ -56,6 +56,8 @@ pub enum ReturnMode {
     UnsizedDestinationPreserve(Register),
     /// Replace the calling function with this function, adopt the parent's ReturnMode
     TailCall,
+    /// Used internally to re-enable hooks after a hook finishes
+    Hook,
 }
 
 #[derive(Debug, Clone, Copy)]

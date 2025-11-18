@@ -12,6 +12,7 @@ use super::{
     StringRef, TableRef,
 };
 use crate::errors::{RuntimeError, RuntimeErrorData};
+use crate::interpreter::debug_hooks::{DebugHook, HookMask};
 use crate::interpreter::interpreted_function::{Function, FunctionDefinition};
 use crate::FastHashMap;
 use downcast::downcast;
@@ -76,6 +77,7 @@ pub(crate) struct ExecutionAccessibleData {
     pub(crate) metatable_keys: Rc<MetatableKeys>,
     pub(crate) cache_pools: Rc<CachePools>,
     pub(crate) tracked_stack_size: usize,
+    pub(crate) debug_hook: DebugHook,
     #[cfg(feature = "instruction_metrics")]
     pub(crate) instruction_tracking: InstructionMetricTracking,
 }
@@ -91,6 +93,7 @@ impl Clone for ExecutionAccessibleData {
             cache_pools: self.cache_pools.clone(),
             // reset, since there's no active call on the new vm
             tracked_stack_size: 0,
+            debug_hook: Default::default(),
             #[cfg(feature = "instruction_metrics")]
             instruction_tracking: Default::default(),
         }
@@ -231,6 +234,7 @@ impl Vm {
                 metatable_keys: Rc::new(metatable_keys),
                 cache_pools: Default::default(),
                 tracked_stack_size: 0,
+                debug_hook: Default::default(),
                 #[cfg(feature = "instruction_metrics")]
                 instruction_tracking: Default::default(),
             },
@@ -349,6 +353,7 @@ impl Vm {
                 heap,
                 &self.execution_stack,
                 &self.execution_data.coroutine_data,
+                &self.execution_data.debug_hook,
             );
         }
 
@@ -365,12 +370,50 @@ impl Vm {
             heap,
             &self.execution_stack,
             &self.execution_data.coroutine_data,
+            &self.execution_data.debug_hook,
         );
     }
 
     #[inline]
     pub fn gc_config_mut(&mut self) -> &mut GarbageCollectorConfig {
         &mut self.execution_data.gc.config
+    }
+
+    pub fn set_hook(
+        &mut self,
+        mask: HookMask,
+        instruction_count: usize,
+        callback: FunctionRef,
+    ) -> Result<(), RuntimeErrorData> {
+        callback.test_validity(&self.execution_data.heap)?;
+
+        self.execution_data.debug_hook.reset();
+        self.execution_data.debug_hook.mask = mask;
+        self.execution_data.debug_hook.after_instructions = instruction_count;
+        self.execution_data.debug_hook.callback = Some(callback.0.key());
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn remove_hook(&mut self) {
+        self.execution_data.debug_hook.reset();
+    }
+
+    pub fn hook(&mut self) -> Option<FunctionRef> {
+        let storage_key = self.execution_data.debug_hook.callback?;
+        let heap_key = self.execution_data.heap.create_ref(storage_key);
+        Some(FunctionRef(heap_key))
+    }
+
+    #[inline]
+    pub fn hook_mask(&self) -> HookMask {
+        self.execution_data.debug_hook.mask
+    }
+
+    #[inline]
+    pub fn hook_count(&self) -> usize {
+        self.execution_data.debug_hook.after_instructions
     }
 
     #[inline]
@@ -491,6 +534,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -511,6 +555,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -531,6 +576,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -623,6 +669,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -655,6 +702,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -836,6 +884,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -876,6 +925,7 @@ impl VmContext<'_> {
                 heap,
                 &self.vm.execution_stack,
                 &self.vm.execution_data.coroutine_data,
+                &self.vm.execution_data.debug_hook,
             );
         }
 
@@ -970,6 +1020,36 @@ impl VmContext<'_> {
     #[inline]
     pub fn gc_config_mut(&mut self) -> &mut GarbageCollectorConfig {
         self.vm.gc_config_mut()
+    }
+
+    #[inline]
+    pub fn set_hook(
+        &mut self,
+        mask: HookMask,
+        instruction_count: usize,
+        callback: FunctionRef,
+    ) -> Result<(), RuntimeErrorData> {
+        self.vm.set_hook(mask, instruction_count, callback)
+    }
+
+    #[inline]
+    pub fn remove_hook(&mut self) {
+        self.vm.remove_hook();
+    }
+
+    #[inline]
+    pub fn hook(&mut self) -> Option<FunctionRef> {
+        self.vm.hook()
+    }
+
+    #[inline]
+    pub fn hook_mask(&self) -> HookMask {
+        self.vm.hook_mask()
+    }
+
+    #[inline]
+    pub fn hook_count(&self) -> usize {
+        self.vm.hook_count()
     }
 
     pub(crate) fn call_function_key<A: ForEachValue, R: FromValues>(

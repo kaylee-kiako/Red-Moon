@@ -127,7 +127,8 @@ impl Coroutine {
                     })
                 }
                 Continuation::Execution(mut execution) => {
-                    let result = execution.handle_external_return(&mut args);
+                    let exec_data = &mut vm.execution_data;
+                    let result = execution.handle_external_return(exec_data, &mut args);
                     vm.store_multi(args);
 
                     vm.execution_stack.push(execution);
@@ -206,6 +207,7 @@ impl Coroutine {
                 heap,
                 &vm.execution_stack,
                 &vm.execution_data.coroutine_data,
+                &vm.execution_data.debug_hook,
             );
         }
 
