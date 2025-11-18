@@ -342,9 +342,17 @@ impl Vm {
 
     pub fn gc_step(&mut self, bytes: usize) {
         let gc = &mut self.execution_data.gc;
-        let heap = &mut self.execution_data.heap;
-
         gc.modify_used_memory(bytes as _);
+
+        self.try_gc_step();
+
+        let gc = &mut self.execution_data.gc;
+        gc.modify_used_memory(-(bytes as isize));
+    }
+
+    fn try_gc_step(&mut self) {
+        let gc = &mut self.execution_data.gc;
+        let heap = &mut self.execution_data.heap;
 
         if gc.should_step() {
             gc.step(
@@ -356,8 +364,6 @@ impl Vm {
                 &self.execution_data.debug_hook,
             );
         }
-
-        gc.modify_used_memory(-(bytes as isize));
     }
 
     pub fn gc_collect(&mut self) {
@@ -527,16 +533,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(heap_key);
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         StringRef(heap_ref)
     }
@@ -548,16 +545,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(heap_key);
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         TableRef(heap_ref)
     }
@@ -569,16 +557,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(heap_key);
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         TableRef(heap_ref)
     }
@@ -662,16 +641,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(key.into());
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         Ok(FunctionRef(heap_ref))
     }
@@ -695,16 +665,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(key.into());
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         FunctionRef(heap_ref)
     }
@@ -877,16 +838,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(key.into());
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         FunctionRef(heap_ref)
     }
@@ -918,16 +870,7 @@ impl VmContext<'_> {
         let heap_ref = heap.create_ref(heap_key);
 
         // test after creating ref to avoid immediately collecting the generated value
-        if gc.should_step() {
-            gc.step(
-                &self.vm.execution_data.metatable_keys,
-                &self.vm.execution_data.cache_pools,
-                heap,
-                &self.vm.execution_stack,
-                &self.vm.execution_data.coroutine_data,
-                &self.vm.execution_data.debug_hook,
-            );
-        }
+        self.vm.try_gc_step();
 
         Ok(CoroutineRef(heap_ref))
     }
