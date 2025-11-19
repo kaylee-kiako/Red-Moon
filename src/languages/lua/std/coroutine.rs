@@ -29,7 +29,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 
         call_ctx.return_values(yieldable, ctx)
     });
-    create.rehydrate("coroutine.isyieldable", ctx)?;
+    isyieldable.rehydrate("coroutine.isyieldable", ctx)?;
 
     // resume
     let resume = ctx.create_function(|call_ctx, ctx| {
@@ -40,7 +40,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             Err(err) => call_ctx.return_values((false, err.to_string()), ctx),
         }
     });
-    create.rehydrate("coroutine.resume", ctx)?;
+    resume.rehydrate("coroutine.resume", ctx)?;
 
     // running
     let running = ctx.create_function(|call_ctx, ctx| {
@@ -54,7 +54,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 
         Ok(())
     });
-    create.rehydrate("coroutine.running", ctx)?;
+    running.rehydrate("coroutine.running", ctx)?;
 
     // status
     let suspended_string = ctx.intern_string(b"suspended");
@@ -77,7 +77,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         };
         call_ctx.return_values(status, ctx)
     });
-    create.rehydrate("coroutine.status", ctx)?;
+    status.rehydrate("coroutine.status", ctx)?;
 
     // wrap
     let wrap = ctx.create_function(|call_ctx, ctx| {
@@ -92,7 +92,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
 
         call_ctx.return_values(f, ctx)
     });
-    create.rehydrate("coroutine.wrap", ctx)?;
+    wrap.rehydrate("coroutine.wrap", ctx)?;
 
     // yield
     let r#yield = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
@@ -110,7 +110,7 @@ pub fn impl_coroutine(ctx: &mut VmContext) -> Result<(), RuntimeError> {
             result
         }
     });
-    create.rehydrate("coroutine.yield", ctx)?;
+    r#yield.rehydrate("coroutine.yield", ctx)?;
 
     if !rehydrating {
         let coroutine = ctx.create_table();
