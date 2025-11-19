@@ -1,8 +1,9 @@
 use crate::errors::{RuntimeError, RuntimeErrorData};
 use crate::interpreter::{
-    ByteString, FromValue, FunctionRef, MultiValue, TableRef, Value, VmContext,
+    ByteString, FromValue, FunctionRef, MultiValue, StringRef, TableRef, Value, VmContext,
 };
-use crate::languages::lua::parse_number;
+use crate::languages::lua::{parse_number, LuaCompiler};
+use std::rc::Rc;
 
 pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     // assert
@@ -416,6 +417,7 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     });
     tonumber.rehydrate("lua.tonumber", ctx)?;
 
+    // pcall
     let pcall = ctx.create_resumable_function(move |(call_ctx, result, state), ctx| {
         let first_call = state.is_empty();
         ctx.store_multi(state);
@@ -447,6 +449,7 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     });
     pcall.rehydrate("lua.pcall", ctx)?;
 
+    // xpcall
     let xpcall = ctx.create_resumable_function(|(call_ctx, result, state), ctx| {
         let handler: Option<FunctionRef> = state.unpack(ctx)?;
 
@@ -482,6 +485,122 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
     });
     xpcall.rehydrate("lua.xpcall", ctx)?;
 
+    // load
+    let load_compiler = Rc::new(LuaCompiler::default());
+    let load_file_compiler = load_compiler.clone();
+    let load = ctx.create_function(move |call_ctx, ctx| {
+        let (chunkname, mode, env): (Option<String>, Option<ByteString>, Option<TableRef>) =
+            call_ctx.get_args_at(1, ctx)?;
+
+        // resolve source and label, allowing errors to bubble up
+        let mut source_bytes = Vec::new();
+        let label;
+
+        if let Ok(byte_string) = call_ctx.get_arg::<ByteString>(0, ctx) {
+            label = chunkname.unwrap_or_else(|| {
+                format!(
+                    "[string {:?}]",
+                    str::from_utf8(byte_string.as_bytes()).unwrap_or_default()
+                )
+            });
+
+            source_bytes.extend(byte_string.as_bytes());
+        } else {
+            label = chunkname.unwrap_or_else(|| String::from("(load)"));
+
+            // build by calling until an empty string or nil is returned
+            let chunk_builder: FunctionRef = call_ctx.get_arg(0, ctx)?;
+
+            loop {
+                let value = chunk_builder.call::<_, Value>((), ctx)?;
+
+                if value.is_nil() {
+                    break;
+                }
+
+                let string_ref = StringRef::from_value(value, ctx)?;
+                let bytes = string_ref.fetch(ctx)?.as_bytes();
+
+                if bytes.is_empty() {
+                    break;
+                }
+
+                source_bytes.extend(bytes);
+            }
+        }
+
+        // compilation errors are returned instead of thrown
+        let compiler = &load_compiler;
+        let try_block_ctx = &mut *ctx;
+        let try_block = move || {
+            let allows_text = mode
+                .as_ref()
+                .map(|mode| mode.as_bytes().contains(&b't'))
+                .unwrap_or(true);
+
+            if !allows_text {
+                return Err(format!(
+                    "attempt to load a text chunk (mode is '{}')",
+                    mode.as_ref()
+                        .map(|m| m.to_string_lossy())
+                        .unwrap_or("".into()),
+                ));
+            }
+
+            let source = String::from_utf8(source_bytes).map_err(|err| err.to_string())?;
+            let module = compiler.compile(&source).map_err(|err| err.to_string())?;
+
+            try_block_ctx
+                .load_function(label, env, module)
+                .map_err(|err| err.to_string())
+        };
+
+        match try_block() {
+            Ok(function_ref) => call_ctx.return_values(function_ref, ctx),
+            Err(err) => call_ctx.return_values((Value::Nil, err), ctx),
+        }
+    });
+    load.rehydrate("lua.load", ctx)?;
+
+    // loadfile
+    let loadfile = ctx.create_function(move |call_ctx, ctx| {
+        let (path, mode, env): (String, Option<ByteString>, Option<TableRef>) =
+            call_ctx.get_args(ctx)?;
+
+        // compilation errors are returned instead of thrown
+        let compiler = &load_file_compiler;
+        let try_block_ctx = &mut *ctx;
+        let try_block = move || {
+            let source = std::fs::read_to_string(&path).map_err(|err| err.to_string())?;
+
+            let allows_text = mode
+                .as_ref()
+                .map(|mode| mode.as_bytes().contains(&b't'))
+                .unwrap_or(true);
+
+            if !allows_text {
+                return Err(format!(
+                    "attempt to load a text chunk (mode is '{}')",
+                    mode.as_ref()
+                        .map(|m| m.to_string_lossy())
+                        .unwrap_or("".into()),
+                ));
+            }
+
+            let module = compiler.compile(&source).map_err(|err| err.to_string())?;
+
+            try_block_ctx
+                .load_function(path, env, module)
+                .map_err(|err| err.to_string())
+        };
+
+        match try_block() {
+            Ok(function_ref) => call_ctx.return_values(function_ref, ctx),
+            Err(err) => call_ctx.return_values((Value::Nil, err), ctx),
+        }
+    });
+    loadfile.rehydrate("lua.loadfile", ctx)?;
+
     // todo: warn
 
     if !rehydrating {
@@ -506,6 +625,8 @@ pub fn impl_basic(ctx: &mut VmContext) -> Result<(), RuntimeError> {
         env.set("tonumber", tonumber, ctx)?;
         env.set("pcall", pcall, ctx)?;
         env.set("xpcall", xpcall, ctx)?;
+        env.set("load", load, ctx)?;
+        env.set("loadfile", loadfile, ctx)?;
     }
 
     Ok(())

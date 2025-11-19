@@ -160,7 +160,7 @@ The garbage collector is incremental only.
 
 | Library     | Supported                                                                                                                      |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `basic`     | ⚠️ Missing `load`, `loadfile`, `warn` and level parameter for `error`                                                          |
+| `basic`     | ⚠️ Missing `warn` and level parameter for `error`. `load` and `loadfile` can't read binary chunks.                             |
 | `coroutine` | ⚠️ Missing `coroutine.close`                                                                                                   |
 | `debug`     | ⚠️ Only `debug.getregistry`, `debug.getmetatable`, `debug.setmetatable`, `debug.gethook` and count support for `debug.sethook` |
 | `math`      | ⚠️ Missing `math.random` and `math.randomseed`                                                                                 |
