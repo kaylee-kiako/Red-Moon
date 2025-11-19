@@ -623,9 +623,6 @@ impl Interpreter {
             .instructions
             .get(self.next_instruction_index)
         {
-            #[cfg(feature = "instruction_metrics")]
-            let _instruction_tracker = exec_data.instruction_tracking.track(instruction);
-
             let gc = &mut exec_data.gc;
             let heap = &mut exec_data.heap;
 
@@ -636,6 +633,9 @@ impl Interpreter {
             }
 
             self.next_instruction_index += 1;
+
+            #[cfg(feature = "instruction_metrics")]
+            let _instruction_tracker = exec_data.instruction_tracking.track(instruction);
 
             match instruction {
                 Instruction::Constant(_) => {
