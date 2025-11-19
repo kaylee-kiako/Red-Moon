@@ -578,6 +578,7 @@ impl VmContext<'_> {
 
         let gc = &mut self.vm.execution_data.gc;
         let heap = &mut self.vm.execution_data.heap;
+        let mut memory_increase = 0;
 
         // create environment stack value
         let environment = environment
@@ -624,7 +625,7 @@ impl VmContext<'_> {
                 source_map: chunk.source_map,
             });
 
-            gc.modify_used_memory(definition.heap_size() as _);
+            memory_increase = definition.heap_size();
 
             let key = heap.store_interpreted_fn(
                 gc,
@@ -636,6 +637,8 @@ impl VmContext<'_> {
 
             keys.push(key);
         }
+
+        gc.modify_used_memory(memory_increase as _);
 
         let key = keys.get(module.main).ok_or(RuntimeErrorData::MissingMain)?;
         let heap_ref = heap.create_ref(key.into());
