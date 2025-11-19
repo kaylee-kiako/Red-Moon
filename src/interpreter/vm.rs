@@ -563,6 +563,7 @@ impl VmContext<'_> {
     }
 
     /// If the environment is unset, the function will use the default environment
+    #[inline]
     pub fn load_function<'a, Label, ByteStrings, B>(
         &mut self,
         label: Label,
@@ -575,7 +576,20 @@ impl VmContext<'_> {
         ByteStrings: IntoIterator<Item = B>,
     {
         let label = label.into();
+        self.load_function_inner(label, environment, module)
+    }
 
+    // load_function with reduced type params
+    fn load_function_inner<'a, ByteStrings, B>(
+        &mut self,
+        label: Rc<str>,
+        environment: Option<TableRef>,
+        module: Module<ByteStrings>,
+    ) -> Result<FunctionRef, RuntimeError>
+    where
+        B: AsRef<[u8]> + 'a,
+        ByteStrings: IntoIterator<Item = B>,
+    {
         let gc = &mut self.vm.execution_data.gc;
         let heap = &mut self.vm.execution_data.heap;
         let mut memory_increase = 0;
