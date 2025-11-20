@@ -76,3 +76,15 @@ impl DebugHook {
         CallResult::Call(fn_index, ReturnMode::Hook)
     }
 }
+
+impl Clone for DebugHook {
+    fn clone(&self) -> Self {
+        Self {
+            mask: self.mask,
+            after_instructions: self.after_instructions,
+            instructions_executed: 0,
+            callback: self.callback,
+            executing: false,
+        }
+    }
+}

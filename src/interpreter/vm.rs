@@ -93,7 +93,7 @@ impl Clone for ExecutionAccessibleData {
             cache_pools: self.cache_pools.clone(),
             // reset, since there's no active call on the new vm
             tracked_stack_size: 0,
-            debug_hook: Default::default(),
+            debug_hook: self.debug_hook.clone(),
             #[cfg(feature = "instruction_metrics")]
             instruction_tracking: Default::default(),
         }
@@ -105,6 +105,7 @@ impl Clone for ExecutionAccessibleData {
         self.gc.clone_from(&source.gc);
         self.metatable_keys.clone_from(&source.metatable_keys);
         self.cache_pools.clone_from(&source.cache_pools);
+        self.debug_hook.clone_from(&source.debug_hook);
         // reset, since there's no active call on the new vm
         self.tracked_stack_size = 0;
 
